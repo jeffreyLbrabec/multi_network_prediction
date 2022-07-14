@@ -1,0 +1,1086 @@
+---
+title: "Combined-Score Ontologies"
+author: "Jeff Brabec"
+date: "10/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+library(readxl)
+library(writexl)
+library(ggrepel)
+library(safejoin)
+source(here("src/make_pan_cell_sets.R"))
+source(here("src/get_plot_cs.R"))
+source(here("src/semantic_plot.R"))
+```
+
+## Read in Scores
+
+```{r}
+#Linear Results
+linear_astro_final_scores <- read_csv(here("results/final_scores/linear_astro_final_scores.csv"))
+linear_glia_final_scores <- read_csv(here("results/final_scores/linear_glia_final_scores.csv"))
+linear_neuron_final_scores <- read_csv(here("results/final_scores/linear_neuron_final_scores.csv"))
+linear_mn_final_scores <- read_csv(here("results/final_scores/linear_mn_final_scores.csv"))
+```
+
+## Calculate FPR and TPR for Genes
+```{r}
+linear_astro_fpr <- get_fpr(linear_astro_final_scores)
+linear_glia_fpr <- get_fpr(linear_glia_final_scores)
+linear_neuron_fpr <- get_fpr(linear_neuron_final_scores)
+linear_mn_fpr <- get_fpr(linear_mn_final_scores)
+```
+
+## No Path v. All Path
+
+### Read in scRNAseq Data
+In the markdown document `process_deg_data` we extracted the DEG for each cell type and merged together the gene lists of like cell types (neuron and glia) into pan-cell type gene lists. The abbreviations `np_ap` designate No-pathology v. Any Pathology. Both early and Late pathology groups are included in "any pathology".
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/ex_neu_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/in_neu_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/ast_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/micro_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/olig_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/opc_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+### Making new pan-cell-type data with scores
+
+```{r}
+pan_neuron_np_ap_degs <- map2(ex_neu_np_ap_degs, in_neu_np_ap_degs, full_join, by = "gene") %>%
+  map(., pick_gene_score)
+
+pan_glia_np_ap_degs <- pmap(list(ast_np_ap_degs, 
+                                 micro_np_ap_degs, 
+                                 olig_np_ap_degs, 
+                                 opc_np_ap_degs), eat_wrapper) %>% 
+  map(., pick_gene_score)
+```
+
+## Ontologies and Plots
+
+### Ex. Neuron
+```{r}
+ex_neu_np_ap_cs_ont <- map(ex_neu_np_ap_degs, 
+                           get_cs_ont,
+                           linear_mn_fpr,
+                           organism = "hsapiens",
+                           ordered_query = TRUE,
+                           significant = TRUE)
+write_xlsx(ex_neu_np_ap_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_all_path/ex_neu_np_ap_cs_ont.xlsx"))
+
+# Up
+ex_neu_np_ap_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/ex_neu_up_revigo.csv"),
+                                          title = "Mulit-Net & Higher Expression Excitatory Neuron Combined Score Ontology",
+                                          subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/ex_neu_np_ap_up_sem_plot.png"),
+       ex_neu_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+ex_neu_np_ap_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/ex_neu_down_revigo.csv"),
+                                            title = "Mulit-Net & Lower Expression Excitatory Neuron Combined Score Ontology",
+                                            subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/ex_neu_np_ap_down_sem_plot.png"),
+       ex_neu_np_ap_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+ex_neu_np_ap_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/ex_neu_all_revigo.csv"),
+                                           title = "Mulit-Net & All Excitatory Neuron DEGs Combined Score Ontology",
+                                           subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/ex_neu_np_ap_all_sem_plot.png"),
+       ex_neu_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### In. Neuron
+```{r}
+in_neu_np_ap_cs_ont <- map(in_neu_np_ap_degs, 
+                           get_cs_ont,
+                           linear_mn_fpr,
+                           organism = "hsapiens",
+                           ordered_query = TRUE,
+                           significant = TRUE)
+write_xlsx(in_neu_np_ap_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_all_path/in_neu_np_ap_cs_ont.xlsx"))
+
+# Up
+in_neu_np_ap_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/in_neu_up_revigo.csv"),
+                                          title = "Mulit-Net & Higher Expression Inhibitory Neuron Combined Score Ontology",
+                                          subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/in_neu_np_ap_up_sem_plot.png"),
+       in_neu_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+in_neu_np_ap_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/in_neu_down_revigo.csv"),
+                                            title = "Mulit-Net & Lower Expression Inhibitory Neuron Combined Score Ontology",
+                                            subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/in_neu_np_ap_down_sem_plot.png"),
+       in_neu_np_ap_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+in_neu_np_ap_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/in_neu_all_revigo.csv"),
+                                           title = "Mulit-Net & All Inhibitory Neuron DEGs Combined Score Ontology",
+                                           subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/in_neu_np_ap_all_sem_plot.png"),
+       in_neu_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Astrocyte
+```{r}
+ast_np_ap_cs_ont <- map(ast_np_ap_degs, 
+                        get_cs_ont,
+                        linear_mn_fpr,
+                        organism = "hsapiens",
+                        ordered_query = TRUE,
+                        significant = FALSE)
+write_xlsx(ast_np_ap_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_all_path/ast_np_ap_cs_ont.xlsx"))
+
+# Up
+ast_np_ap_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/ast_up_revigo.csv"),
+                                       title = "Mulit-Net & Higher Expression Astrocyte Combined Score Ontology",
+                                       subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/ast_np_ap_up_sem_plot.png"),
+       ast_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+# ast_np_ap_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/ast_down_revigo.csv"),
+#                                          title = "Mulit-Net & Lower Expression Astrocyte Combined Score Ontology",
+#                                          subtitle = "No Pathology V. All Pathology")
+# ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/ast_np_ap_down_sem_plot.png"),
+#        ast_np_ap_down_sem_plot,
+#        height = 8,
+#        width = 8,
+#        units = "in",
+#        dpi = 600)
+
+# All
+ast_np_ap_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/ast_all_revigo.csv"),
+                                        title = "Mulit-Net & All Astrocyte DEGs Combined Score Ontology",
+                                        subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/ast_np_ap_all_sem_plot.png"),
+       ast_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Oligodendrocyte
+```{r}
+olig_np_ap_cs_ont <- map(olig_np_ap_degs, 
+                         get_cs_ont,
+                         linear_mn_fpr,
+                         organism = "hsapiens",
+                         ordered_query = TRUE,
+                         significant = TRUE)
+write_xlsx(olig_np_ap_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_all_path/olig_np_ap_cs_ont.xlsx"))
+
+# Up
+olig_np_ap_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/olig_up_revigo.csv"),
+                                        title = "Mulit-Net & Higher Expression Oligodendrocyte Combined Score Ontology",
+                                        subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/olig_np_ap_up_sem_plot.png"),
+       olig_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+olig_np_ap_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/olig_down_revigo.csv"),
+                                          title = "Mulit-Net & Lower Expression Oligodendrocyte Combined Score Ontology",
+                                          subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/olig_np_ap_down_sem_plot.png"),
+       olig_np_ap_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+olig_np_ap_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/olig_all_revigo.csv"),
+                                         title = "Mulit-Net & All Oligodendrocyte DEGs Combined Score Ontology",
+                                         subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/olig_np_ap_all_sem_plot.png"),
+       olig_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Oligodendrocyte Precursor Cell
+```{r}
+opc_np_ap_cs_ont <- map(opc_np_ap_degs, 
+                        get_cs_ont,
+                        linear_mn_fpr,
+                        organism = "hsapiens",
+                        ordered_query = TRUE,
+                        significant = TRUE)
+write_xlsx(opc_np_ap_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_all_path/opc_np_ap_cs_ont.xlsx"))
+
+# Up
+opc_np_ap_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/opc_up_revigo.csv"),
+                                       title = "Mulit-Net & Higher Expression OPC Combined Score Ontology",
+                                       subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/opc_np_ap_up_sem_plot.png"),
+       opc_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+opc_np_ap_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/opc_down_revigo.csv"),
+                                         title = "Mulit-Net & Lower Expression OPC Combined Score Ontology",
+                                         subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/opc_np_ap_down_sem_plot.png"),
+       opc_np_ap_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+opc_np_ap_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/opc_all_revigo.csv"),
+                                        title = "Mulit-Net & All OPC DEGs Combined Score Ontology",
+                                        subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/opc_np_ap_all_sem_plot.png"),
+       opc_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Pan-Neuronal
+```{r}
+pan_neuron_np_ap_cs_ont <- map(pan_neuron_np_ap_degs, 
+                               get_cs_ont,
+                               linear_mn_fpr,
+                               organism = "hsapiens",
+                               ordered_query = TRUE,
+                               significant = TRUE)
+write_xlsx(pan_neuron_np_ap_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_all_path/pan_neuron_np_ap_cs_ont.xlsx"))
+
+# Up
+pan_neuron_np_ap_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/pan_neuron_up_revigo.csv"),
+                                              title = "Mulit-Net & Higher Expression Pan-Neuronal Combined Score Ontology",
+                                              subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/pan_neuron_np_ap_up_sem_plot.png"),
+       pan_neuron_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+pan_neuron_np_ap_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/pan_neuron_down_revigo.csv"),
+                                                title = "Mulit-Net & Lower Expression Pan-Neuronal Combined Score Ontology",
+                                                subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/pan_neuron_np_ap_down_sem_plot.png"),
+       pan_neuron_np_ap_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+pan_neuron_np_ap_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/pan_neuron_all_revigo.csv"),
+                                               title = "Mulit-Net & All Pan-Neuronal DEGs Combined Score Ontology",
+                                               subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/pan_neuron_np_ap_all_sem_plot.png"),
+       pan_neuron_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Pan-Glial
+```{r}
+pan_glia_np_ap_cs_ont <- map(pan_glia_np_ap_degs, 
+                             get_cs_ont,
+                             linear_mn_fpr,
+                             organism = "hsapiens",
+                             ordered_query = TRUE,
+                             significant = TRUE)
+write_xlsx(pan_glia_np_ap_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_all_path/pan_glia_np_ap_cs_ont.xlsx"))
+
+# Up
+pan_glia_np_ap_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/pan_glia_up_revigo.csv"),
+                                            title = "Mulit-Net & Higher Expression Pan-Glial Combined Score Ontology",
+                                            subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/pan_glia_np_ap_up_sem_plot.png"),
+       pan_glia_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+pan_glia_np_ap_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/pan_glia_down_revigo.csv"),
+                                              title = "Mulit-Net & Lower Expression Pan-Glial Combined Score Ontology",
+                                              subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/pan_glia_np_ap_down_sem_plot.png"),
+       pan_glia_np_ap_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+pan_glia_np_ap_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_all_path/pan_glia_all_revigo.csv"),
+                                             title = "Mulit-Net & All Pan-Glial DEGs Combined Score Ontology",
+                                             subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_all_path/pan_glia_np_ap_all_sem_plot.png"),
+       pan_glia_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+## No Path v. Early Path
+
+### Read in scRNAseq Data
+
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score.
+
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ex_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/in_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ast_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/micro_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/olig_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/opc_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+### Making new pan-cell-type data with scores
+
+```{r}
+pan_neuron_np_ep_degs <- map2(ex_neu_np_ep_degs, in_neu_np_ep_degs, full_join, by = "gene") %>%
+  map(., pick_gene_score)
+
+pan_glia_np_ep_degs <- pmap(list(ast_np_ep_degs, 
+                                 micro_np_ep_degs, 
+                                 olig_np_ep_degs, 
+                                 opc_np_ep_degs), eat_wrapper) %>% 
+  map(., pick_gene_score)
+```
+
+## Ontologies and Plots
+
+### Ex. Neuron
+```{r}
+ex_neu_np_ep_cs_ont <- map(ex_neu_np_ep_degs, 
+                           get_cs_ont,
+                           linear_mn_fpr,
+                           organism = "hsapiens",
+                           ordered_query = TRUE,
+                           significant = TRUE)
+write_xlsx(ex_neu_np_ep_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_early_path/ex_neu_np_ep_cs_ont.xlsx"))
+
+# Up
+ex_neu_np_ep_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/ex_neu_up_revigo.csv"),
+                                          title = "Mulit-Net & Higher Expression Excitatory Neuron Combined Score Ontology",
+                                          subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/ex_neu_np_ep_up_sem_plot.png"),
+       ex_neu_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+ex_neu_np_ep_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/ex_neu_down_revigo.csv"),
+                                            title = "Mulit-Net & Lower Expression Excitatory Neuron Combined Score Ontology",
+                                            subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/ex_neu_np_ep_down_sem_plot.png"),
+       ex_neu_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+ex_neu_np_ep_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/ex_neu_all_revigo.csv"),
+                                           title = "Mulit-Net & All Excitatory Neuron DEGs Combined Score Ontology",
+                                           subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/ex_neu_np_ep_all_sem_plot.png"),
+       ex_neu_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### In. Neuron
+```{r}
+in_neu_np_ep_cs_ont <- map(in_neu_np_ep_degs, 
+                           get_cs_ont,
+                           linear_mn_fpr,
+                           organism = "hsapiens",
+                           ordered_query = TRUE,
+                           significant = TRUE)
+write_xlsx(in_neu_np_ep_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_early_path/in_neu_np_ep_cs_ont.xlsx"))
+
+# Up
+in_neu_np_ep_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/in_neu_up_revigo.csv"),
+                                          title = "Mulit-Net & Higher Expression Inhibitory Neuron Combined Score Ontology",
+                                          subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/in_neu_np_ep_up_sem_plot.png"),
+       in_neu_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+in_neu_np_ep_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/in_neu_down_revigo.csv"),
+                                            title = "Mulit-Net & Lower Expression Inhibitory Neuron Combined Score Ontology",
+                                            subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/in_neu_np_ep_down_sem_plot.png"),
+       in_neu_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+in_neu_np_ep_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/in_neu_all_revigo.csv"),
+                                           title = "Mulit-Net & All Inhibitory Neuron DEGs Combined Score Ontology",
+                                           subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/in_neu_np_ep_all_sem_plot.png"),
+       in_neu_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Astrocyte
+```{r}
+ast_np_ep_cs_ont <- map(ast_np_ep_degs, 
+                        get_cs_ont,
+                        linear_mn_fpr,
+                        organism = "hsapiens",
+                        ordered_query = TRUE,
+                        significant = FALSE)
+write_xlsx(ast_np_ep_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_early_path/ast_np_ep_cs_ont.xlsx"))
+
+# Up
+ast_np_ep_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/ast_up_revigo.csv"),
+                                       title = "Mulit-Net & Higher Expression Astrocyte Combined Score Ontology",
+                                       subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/ast_np_ep_up_sem_plot.png"),
+       ast_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+# ast_np_ep_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/ast_down_revigo.csv"),
+#                                          title = "Mulit-Net & Lower Expression Astrocyte Combined Score Ontology",
+#                                          subtitle = "No Pathology V. Early Pathology")
+# ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/ast_np_ep_down_sem_plot.png"),
+#        ast_np_ep_down_sem_plot,
+#        height = 8,
+#        width = 8,
+#        units = "in",
+#        dpi = 600)
+
+# All
+ast_np_ep_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/ast_all_revigo.csv"),
+                                        title = "Mulit-Net & All Astrocyte DEGs Combined Score Ontology",
+                                        subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/ast_np_ep_all_sem_plot.png"),
+       ast_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Oligodendrocyte
+```{r}
+olig_np_ep_cs_ont <- map(olig_np_ep_degs, 
+                         get_cs_ont,
+                         linear_mn_fpr,
+                         organism = "hsapiens",
+                         ordered_query = TRUE,
+                         significant = TRUE)
+write_xlsx(olig_np_ep_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_early_path/olig_np_ep_cs_ont.xlsx"))
+
+# Up
+olig_np_ep_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/olig_up_revigo.csv"),
+                                        title = "Mulit-Net & Higher Expression Oligodendrocyte Combined Score Ontology",
+                                        subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/olig_np_ep_up_sem_plot.png"),
+       olig_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+olig_np_ep_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/olig_down_revigo.csv"),
+                                          title = "Mulit-Net & Lower Expression Oligodendrocyte Combined Score Ontology",
+                                          subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/olig_np_ep_down_sem_plot.png"),
+       olig_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+olig_np_ep_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/olig_all_revigo.csv"),
+                                         title = "Mulit-Net & All Oligodendrocyte DEGs Combined Score Ontology",
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/olig_np_ep_all_sem_plot.png"),
+       olig_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Oligodendrocyte Precursor Cell
+```{r}
+opc_np_ep_cs_ont <- map(opc_np_ep_degs, 
+                        get_cs_ont,
+                        linear_mn_fpr,
+                        organism = "hsapiens",
+                        ordered_query = TRUE,
+                        significant = FALSE)
+write_xlsx(opc_np_ep_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_early_path/opc_np_ep_cs_ont.xlsx"))
+
+# Up
+opc_np_ep_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/opc_up_revigo.csv"),
+                                       title = "Mulit-Net & Higher Expression OPC Combined Score Ontology",
+                                       subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/opc_np_ep_up_sem_plot.png"),
+       opc_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+opc_np_ep_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/opc_down_revigo.csv"),
+                                         title = "Mulit-Net & Lower Expression OPC Combined Score Ontology",
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/opc_np_ep_down_sem_plot.png"),
+       opc_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+# opc_np_ep_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/opc_all_revigo.csv"),
+#                                         title = "Mulit-Net & All OPC DEGs Combined Score Ontology",
+#                                         subtitle = "No Pathology V. Early Pathology")
+# ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/opc_np_ep_all_sem_plot.png"),
+#        opc_np_ep_all_sem_plot,
+#        height = 8,
+#        width = 8,
+#        units = "in",
+#        dpi = 600)
+```
+
+### Pan-Neuronal
+```{r}
+pan_neuron_np_ep_cs_ont <- map(pan_neuron_np_ep_degs, 
+                               get_cs_ont,
+                               linear_mn_fpr,
+                               organism = "hsapiens",
+                               ordered_query = TRUE,
+                               significant = TRUE)
+write_xlsx(pan_neuron_np_ep_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_early_path/pan_neuron_np_ep_cs_ont.xlsx"))
+
+# Up
+pan_neuron_np_ep_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/pan_neuron_up_revigo.csv"),
+                                              title = "Mulit-Net & Higher Expression Pan-Neuronal Combined Score Ontology",
+                                              subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/pan_neuron_np_ep_up_sem_plot.png"),
+       pan_neuron_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+pan_neuron_np_ep_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/pan_neuron_down_revigo.csv"),
+                                                title = "Mulit-Net & Lower Expression Pan-Neuronal Combined Score Ontology",
+                                                subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/pan_neuron_np_ep_down_sem_plot.png"),
+       pan_neuron_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+pan_neuron_np_ep_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/pan_neuron_all_revigo.csv"),
+                                               title = "Mulit-Net & All Pan-Neuronal DEGs Combined Score Ontology",
+                                               subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/pan_neuron_np_ep_all_sem_plot.png"),
+       pan_neuron_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Pan-Glial
+```{r}
+pan_glia_np_ep_cs_ont <- map(pan_glia_np_ep_degs, 
+                             get_cs_ont,
+                             linear_mn_fpr,
+                             organism = "hsapiens",
+                             ordered_query = TRUE,
+                             significant = TRUE)
+write_xlsx(pan_glia_np_ep_cs_ont,
+           here("results/cdf_ontology/gost_res/no_path_v_early_path/pan_glia_np_ep_cs_ont.xlsx"))
+
+# Up
+pan_glia_np_ep_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/pan_glia_up_revigo.csv"),
+                                            title = "Mulit-Net & Higher Expression Pan-Glial Combined Score Ontology",
+                                            subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/pan_glia_np_ep_up_sem_plot.png"),
+       pan_glia_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+pan_glia_np_ep_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/pan_glia_down_revigo.csv"),
+                                              title = "Mulit-Net & Lower Expression Pan-Glial Combined Score Ontology",
+                                              subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/pan_glia_np_ep_down_sem_plot.png"),
+       pan_glia_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+pan_glia_np_ep_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/no_path_v_early_path/pan_glia_all_revigo.csv"),
+                                             title = "Mulit-Net & All Pan-Glial DEGs Combined Score Ontology",
+                                             subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/no_path_v_early_path/pan_glia_np_ep_all_sem_plot.png"),
+       pan_glia_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+## Early Path v. Late Path
+
+### Read in scRNAseq Data
+In the markdown document `process_deg_data` we extracted the DEG for each cell type and merged together the gene lists of like cell types (neuron and glia) into pan-cell type gene lists. Where `ep_lp` denotes early versus late pathology comparison.
+```{r}
+#Excitatory Neuron Data
+ex_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ex_neu_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/in_neu_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ast_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/micro_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/olig_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/opc_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+### Making new pan-cell-type data with scores
+
+```{r}
+pan_neuron_ep_lp_degs <- map2(ex_neu_ep_lp_degs, in_neu_ep_lp_degs, full_join, by = "gene") %>%
+  map(., pick_gene_score)
+
+pan_glia_ep_lp_degs <- pmap(list(ast_ep_lp_degs, 
+                                 micro_ep_lp_degs, 
+                                 olig_ep_lp_degs, 
+                                 opc_ep_lp_degs), eat_wrapper) %>% 
+  map(., pick_gene_score)
+```
+
+## Ontologies and Plots
+
+### Ex. Neuron
+```{r}
+ex_neu_ep_lp_cs_ont <- map(ex_neu_ep_lp_degs, 
+                           get_cs_ont,
+                           linear_mn_fpr,
+                           organism = "hsapiens",
+                           ordered_query = TRUE,
+                           significant = TRUE)
+write_xlsx(ex_neu_ep_lp_cs_ont,
+           here("results/cdf_ontology/gost_res/early_path_v_late_path/ex_neu_ep_lp_cs_ont.xlsx"))
+
+# Up
+ex_neu_ep_lp_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/ex_neu_up_revigo.csv"),
+                                          title = "Mulit-Net & Higher Expression Excitatory Neuron Combined Score Ontology",
+                                          subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/ex_neu_ep_lp_up_sem_plot.png"),
+       ex_neu_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+ex_neu_ep_lp_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/ex_neu_down_revigo.csv"),
+                                            title = "Mulit-Net & Lower Expression Excitatory Neuron Combined Score Ontology",
+                                            subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/ex_neu_ep_lp_down_sem_plot.png"),
+       ex_neu_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+ex_neu_ep_lp_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/ex_neu_all_revigo.csv"),
+                                           title = "Mulit-Net & All Excitatory Neuron DEGs Combined Score Ontology",
+                                           subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/ex_neu_ep_lp_all_sem_plot.png"),
+       ex_neu_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### In. Neuron
+```{r}
+in_neu_ep_lp_cs_ont <- map(in_neu_ep_lp_degs, 
+                           get_cs_ont,
+                           linear_mn_fpr,
+                           organism = "hsapiens",
+                           ordered_query = TRUE,
+                           significant = TRUE)
+write_xlsx(in_neu_ep_lp_cs_ont,
+           here("results/cdf_ontology/gost_res/early_path_v_late_path/in_neu_ep_lp_cs_ont.xlsx"))
+
+# Up
+in_neu_ep_lp_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/in_neu_up_revigo.csv"),
+                                          title = "Mulit-Net & Higher Expression Inhibitory Neuron Combined Score Ontology",
+                                          subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/in_neu_ep_lp_up_sem_plot.png"),
+       in_neu_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+in_neu_ep_lp_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/in_neu_down_revigo.csv"),
+                                            title = "Mulit-Net & Lower Expression Inhibitory Neuron Combined Score Ontology",
+                                            subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/in_neu_ep_lp_down_sem_plot.png"),
+       in_neu_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+in_neu_ep_lp_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/in_neu_all_revigo.csv"),
+                                           title = "Mulit-Net & All Inhibitory Neuron DEGs Combined Score Ontology",
+                                           subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/in_neu_ep_lp_all_sem_plot.png"),
+       in_neu_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Astrocyte
+```{r}
+ast_ep_lp_cs_ont <- map(ast_ep_lp_degs, 
+                        get_cs_ont,
+                        linear_mn_fpr,
+                        organism = "hsapiens",
+                        ordered_query = TRUE,
+                        significant = TRUE)
+write_xlsx(ast_ep_lp_cs_ont,
+           here("results/cdf_ontology/gost_res/early_path_v_late_path/ast_ep_lp_cs_ont.xlsx"))
+
+# Up
+ast_ep_lp_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/ast_up_revigo.csv"),
+                                       title = "Mulit-Net & Higher Expression Astrocyte Combined Score Ontology",
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/ast_ep_lp_up_sem_plot.png"),
+       ast_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+ast_ep_lp_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/ast_down_revigo.csv"),
+                                         title = "Mulit-Net & Lower Expression Astrocyte Combined Score Ontology",
+                                         subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/ast_ep_lp_down_sem_plot.png"),
+       ast_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+ast_ep_lp_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/ast_all_revigo.csv"),
+                                        title = "Mulit-Net & All Astrocyte DEGs Combined Score Ontology",
+                                        subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/ast_ep_lp_all_sem_plot.png"),
+       ast_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Oligodendrocyte
+```{r}
+olig_ep_lp_cs_ont <- map(olig_ep_lp_degs, 
+                         get_cs_ont,
+                         linear_mn_fpr,
+                         organism = "hsapiens",
+                         ordered_query = TRUE,
+                         significant = TRUE)
+write_xlsx(olig_ep_lp_cs_ont,
+           here("results/cdf_ontology/gost_res/early_path_v_late_path/olig_ep_lp_cs_ont.xlsx"))
+
+# Up
+olig_ep_lp_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/olig_up_revigo.csv"),
+                                        title = "Mulit-Net & Higher Expression Oligodendrocyte Combined Score Ontology",
+                                        subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/olig_ep_lp_up_sem_plot.png"),
+       olig_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+olig_ep_lp_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/olig_down_revigo.csv"),
+                                          title = "Mulit-Net & Lower Expression Oligodendrocyte Combined Score Ontology",
+                                          subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/olig_ep_lp_down_sem_plot.png"),
+       olig_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+olig_ep_lp_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/olig_all_revigo.csv"),
+                                         title = "Mulit-Net & All Oligodendrocyte DEGs Combined Score Ontology",
+                                         subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/olig_ep_lp_all_sem_plot.png"),
+       olig_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Oligodendrocyte Precursor Cell
+```{r}
+opc_ep_lp_cs_ont <- map(opc_ep_lp_degs, 
+                        get_cs_ont,
+                        linear_mn_fpr,
+                        organism = "hsapiens",
+                        ordered_query = TRUE,
+                        significant = FALSE)
+write_xlsx(opc_ep_lp_cs_ont,
+           here("results/cdf_ontology/gost_res/early_path_v_late_path/opc_ep_lp_cs_ont.xlsx"))
+
+# Up
+opc_ep_lp_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/opc_up_revigo.csv"),
+                                       title = "Mulit-Net & Higher Expression OPC Combined Score Ontology",
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/opc_ep_lp_up_sem_plot.png"),
+       opc_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+# opc_ep_lp_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/opc_down_revigo.csv"),
+#                                          title = "Mulit-Net & Lower Expression OPC Combined Score Ontology",
+#                                          subtitle = "Early Pathology V. Late Pathology")
+# ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/opc_ep_lp_down_sem_plot.png"),
+#        opc_ep_lp_down_sem_plot,
+#        height = 8,
+#        width = 8,
+#        units = "in",
+#        dpi = 600)
+
+# All
+opc_ep_lp_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/opc_all_revigo.csv"),
+                                        title = "Mulit-Net & All OPC DEGs Combined Score Ontology",
+                                        subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/opc_ep_lp_all_sem_plot.png"),
+       opc_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Pan-Neuronal
+```{r}
+pan_neuron_ep_lp_cs_ont <- map(pan_neuron_ep_lp_degs, 
+                               get_cs_ont,
+                               linear_mn_fpr,
+                               organism = "hsapiens",
+                               ordered_query = TRUE,
+                               significant = TRUE)
+write_xlsx(pan_neuron_ep_lp_cs_ont,
+           here("results/cdf_ontology/gost_res/early_path_v_late_path/pan_neuron_ep_lp_cs_ont.xlsx"))
+
+# Up
+pan_neuron_ep_lp_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/pan_neuron_up_revigo.csv"),
+                                              title = "Mulit-Net & Higher Expression Pan-Neuronal Combined Score Ontology",
+                                              subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/pan_neuron_ep_lp_up_sem_plot.png"),
+       pan_neuron_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+pan_neuron_ep_lp_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/pan_neuron_down_revigo.csv"),
+                                                title = "Mulit-Net & Lower Expression Pan-Neuronal Combined Score Ontology",
+                                                subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/pan_neuron_ep_lp_down_sem_plot.png"),
+       pan_neuron_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+pan_neuron_ep_lp_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/pan_neuron_all_revigo.csv"),
+                                               title = "Mulit-Net & All Pan-Neuronal DEGs Combined Score Ontology",
+                                               subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/pan_neuron_ep_lp_all_sem_plot.png"),
+       pan_neuron_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Pan-Glial
+```{r}
+pan_glia_ep_lp_cs_ont <- map(pan_glia_ep_lp_degs, 
+                             get_cs_ont,
+                             linear_mn_fpr,
+                             organism = "hsapiens",
+                             ordered_query = TRUE,
+                             significant = TRUE)
+write_xlsx(pan_glia_ep_lp_cs_ont,
+           here("results/cdf_ontology/gost_res/early_path_v_late_path/pan_glia_ep_lp_cs_ont.xlsx"))
+
+# Up
+pan_glia_ep_lp_up_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/pan_glia_up_revigo.csv"),
+                                            title = "Mulit-Net & Higher Expression Pan-Glial Combined Score Ontology",
+                                            subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/pan_glia_ep_lp_up_sem_plot.png"),
+       pan_glia_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+# Down
+pan_glia_ep_lp_down_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/pan_glia_down_revigo.csv"),
+                                              title = "Mulit-Net & Lower Expression Pan-Glial Combined Score Ontology",
+                                              subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/pan_glia_ep_lp_down_sem_plot.png"),
+       pan_glia_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+# All
+pan_glia_ep_lp_all_sem_plot <- semantic_plot(here("results/cdf_ontology/revigo_res/early_path_v_late_path/pan_glia_all_revigo.csv"),
+                                             title = "Mulit-Net & All Pan-Glial DEGs Combined Score Ontology",
+                                             subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/cdf_semantic_plots/early_path_v_late_path/pan_glia_ep_lp_all_sem_plot.png"),
+       pan_glia_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```

@@ -1,0 +1,58 @@
+---
+title: "Examining Scores Across Bootstraps and Folds"
+author: "Jeff Brabec"
+date: "1/14/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+```
+
+## Read in Linear Multi-Net Models
+```{r}
+combined_model_scores <- read_rds(here("results/multi_net_linear_final_predictions/multi_net_comb_boot_med_preds.rds"))
+
+fold_one <- list.files(path = here("results/multi_net_linear_final_predictions/Fold01/"), full.names = TRUE)
+
+
+f1_b1 <- map(fold_one, read_csv)
+
+f1_b1_tib <- tibble(boots = f1_b1)
+
+names(f1_b1) <- 1:25
+
+huh <- eat(f1_b1_tib$boots,
+           .by = c("genes", "class"), 
+           .mode = "full")
+```
+
+## Make Boxplot of Scores
+```{r}
+pred_val_boxes <- combined_model_scores %>%
+  mutate(genes = as.character(genes)) %>% 
+  pivot_longer(cols = contains("pred_p"),
+               names_to = "prediction",
+               values_to = "pred_vals") %>% 
+  ggplot(aes(x = fct_reorder(genes, mean_pred_val), y = pred_vals, color = class, group = genes)) +
+  geom_boxplot() +
+  labs(x = "Gene",
+       y = "Model Prediction Value",
+       title = "Mean Prediction Value Comparison") +
+  theme(legend.position = "none")
+
+ggsave(here("results/figures/avg_boxes.png"), 
+       plot = pred_val_boxes, 
+       width = 20, 
+       height = 10, 
+       units = "in",
+       dpi = 600)
+```
+
+
+```{r}
+pc_score = sign(corr(pc_score, disease_lab)) * pc_score
+```
+

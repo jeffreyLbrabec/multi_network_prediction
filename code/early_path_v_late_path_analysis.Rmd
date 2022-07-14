@@ -1,0 +1,815 @@
+---
+title: "Early Pathology V. Late Pathology Analysis"
+author: "Jeff Brabec"
+date: "10/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+library(readxl)
+library(ggupset)
+library(hrbrthemes)
+source(here("src/get_deg_aucs.R"))
+source(here("src/convert_to_names.R"))
+source(here("src/final_auc_processing.R"))
+source(here("src/get_scrnaseq_data.R"))
+source(here("src/make_tile_plot.R"))
+```
+
+# Data
+
+## Read in Scores
+```{r}
+#Linear Results
+linear_astro_final_scores <- read_csv(here("results/final_scores/linear_astro_final_scores.csv"))
+linear_glia_final_scores <- read_csv(here("results/final_scores/linear_glia_final_scores.csv"))
+linear_neuron_final_scores <- read_csv(here("results/final_scores/linear_neuron_final_scores.csv"))
+linear_mn_final_scores <- read_csv(here("results/final_scores/linear_mn_final_scores.csv"))
+
+#RBF Results
+rbf_astro_final_scores <- read_csv(here("results/final_scores/rbf_astro_final_scores.csv"))
+rbf_glia_final_scores <- read_csv(here("results/final_scores/rbf_glia_final_scores.csv"))
+rbf_neuron_final_scores <- read_csv(here("results/final_scores/rbf_neuron_final_scores.csv"))
+rbf_mn_final_scores <- read_csv(here("results/final_scores/rbf_mn_final_scores.csv"))
+```
+
+## Read in scRNAseq Data
+In the markdown document `process_deg_data` we extracted the DEG for each cell type and merged together the gene lists of like cell types (neuron and glia) into pan-cell type gene lists. Where `ep_lp` denotes early versus late pathology comparison.
+```{r}
+#Excitatory Neuron Data
+ex_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ex_neu_ep_lp_degs.rds"))
+
+#Inhibitory Neuron Data
+in_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/in_neu_ep_lp_degs.rds"))
+
+#Astrocyte Data
+ast_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ast_ep_lp_degs.rds"))
+
+#Microglia Data
+micro_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/micro_ep_lp_degs.rds"))
+
+#Oligodendrocyte Data
+olig_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/olig_ep_lp_degs.rds"))
+
+#Oligodendrocyte Precursor Cell Data
+opc_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/opc_ep_lp_degs.rds"))
+
+#Pan-Neuronal Data
+pan_neuron_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/pan_neuron_ep_lp_degs.rds"))
+
+#Pan-Glial Data
+pan_glia_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/pan_glia_ep_lp_degs.rds"))
+```
+
+# Get AUC Values for Each Division of Data
+
+## Linear Model Results
+
+### Excitatory Neuron
+```{r}
+# UpRegulated Ex. Neuron AUCs --------------------------------------------
+
+linear_astro_up_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$UP, linear_astro_final_scores)
+linear_glia_up_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$UP, linear_glia_final_scores)
+linear_neuron_up_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$UP, linear_neuron_final_scores)
+linear_mn_up_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$UP, linear_mn_final_scores)
+
+# Downregulated Ex. Neuron AUCs ---------------------------------------------
+
+linear_astro_down_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$DOWN, linear_astro_final_scores)
+linear_glia_down_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$DOWN, linear_glia_final_scores)
+linear_neuron_down_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$DOWN, linear_neuron_final_scores)
+linear_mn_down_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$DOWN, linear_mn_final_scores)
+
+# All Neuron AUCs ---------------------------------------------------------
+
+linear_astro_all_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$ALL, linear_astro_final_scores)
+linear_glia_all_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$ALL, linear_glia_final_scores)
+linear_neuron_all_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$ALL, linear_neuron_final_scores)
+linear_mn_all_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$ALL, linear_mn_final_scores)
+```
+
+### Inhibitory Neuron
+```{r}
+# Upregulated In. Neuron AUCs --------------------------------------------
+
+linear_astro_up_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$UP, linear_astro_final_scores)
+linear_glia_up_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$UP, linear_glia_final_scores)
+linear_neuron_up_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$UP, linear_neuron_final_scores)
+linear_mn_up_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$UP, linear_mn_final_scores)
+
+# Downregulated In. Neuron AUCs ------------------------------------------
+
+linear_astro_down_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$DOWN, linear_astro_final_scores)
+linear_glia_down_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$DOWN, linear_glia_final_scores)
+linear_neuron_down_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$DOWN, linear_neuron_final_scores)
+linear_mn_down_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$DOWN, linear_mn_final_scores)
+
+# All In. Neuron AUCs ----------------------------------------------------
+
+linear_astro_all_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$ALL, linear_astro_final_scores)
+linear_glia_all_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$ALL, linear_glia_final_scores)
+linear_neuron_all_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$ALL, linear_neuron_final_scores)
+linear_mn_all_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$ALL, linear_mn_final_scores)
+```
+
+### Astrocyte
+```{r}
+# Upregulated Astrocyte AUCs ----------------------------------------------
+
+linear_astro_up_ast <- get_deg_aucs(ast_ep_lp_degs$UP, linear_astro_final_scores)
+linear_glia_up_ast <- get_deg_aucs(ast_ep_lp_degs$UP, linear_glia_final_scores)
+linear_neuron_up_ast <- get_deg_aucs(ast_ep_lp_degs$UP, linear_neuron_final_scores)
+linear_mn_up_ast <- get_deg_aucs(ast_ep_lp_degs$UP, linear_mn_final_scores)
+
+# Downregulated Astrocyte AUCs ------------------------------------------------
+
+linear_astro_down_ast <- get_deg_aucs(ast_ep_lp_degs$DOWN, linear_astro_final_scores)
+linear_glia_down_ast <- get_deg_aucs(ast_ep_lp_degs$DOWN, linear_glia_final_scores)
+linear_neuron_down_ast <- get_deg_aucs(ast_ep_lp_degs$DOWN, linear_neuron_final_scores)
+linear_mn_down_ast <- get_deg_aucs(ast_ep_lp_degs$DOWN, linear_mn_final_scores)
+
+# All Astrocyte AUCs ------------------------------------------------------
+
+linear_astro_all_ast <- get_deg_aucs(ast_ep_lp_degs$ALL, linear_astro_final_scores)
+linear_glia_all_ast <- get_deg_aucs(ast_ep_lp_degs$ALL, linear_glia_final_scores)
+linear_neuron_all_ast <- get_deg_aucs(ast_ep_lp_degs$ALL, linear_neuron_final_scores)
+linear_mn_all_ast <- get_deg_aucs(ast_ep_lp_degs$ALL, linear_mn_final_scores)
+```
+
+### Microglia
+```{r}
+# Upregulated Micro AUCs --------------------------------------------------
+
+linear_astro_up_micro <- get_deg_aucs(micro_ep_lp_degs$UP, linear_astro_final_scores)
+linear_glia_up_micro <- get_deg_aucs(micro_ep_lp_degs$UP, linear_glia_final_scores)
+linear_neuron_up_micro <- get_deg_aucs(micro_ep_lp_degs$UP, linear_neuron_final_scores)
+linear_mn_up_micro <- get_deg_aucs(micro_ep_lp_degs$UP, linear_mn_final_scores)
+
+# Downregulated Micro AUCs ------------------------------------------------
+linear_astro_down_micro <- get_deg_aucs(micro_ep_lp_degs$DOWN, linear_astro_final_scores)
+linear_glia_down_micro <- get_deg_aucs(micro_ep_lp_degs$DOWN, linear_glia_final_scores)
+linear_neuron_down_micro <- get_deg_aucs(micro_ep_lp_degs$DOWN, linear_neuron_final_scores)
+linear_mn_down_micro <- get_deg_aucs(micro_ep_lp_degs$DOWN, linear_mn_final_scores)
+
+# All Micro AUCs ----------------------------------------------------------
+
+linear_astro_all_micro <- get_deg_aucs(micro_ep_lp_degs$ALL, linear_astro_final_scores)
+linear_glia_all_micro <- get_deg_aucs(micro_ep_lp_degs$ALL, linear_glia_final_scores)
+linear_neuron_all_micro <- get_deg_aucs(micro_ep_lp_degs$ALL, linear_neuron_final_scores)
+linear_mn_all_micro <- get_deg_aucs(micro_ep_lp_degs$ALL, linear_mn_final_scores)
+```
+
+### Oligodendrocyte
+```{r}
+# Upregulated Olig AUCs --------------------------------------------------
+
+linear_astro_up_olig <- get_deg_aucs(olig_ep_lp_degs$UP, linear_astro_final_scores)
+linear_glia_up_olig <- get_deg_aucs(olig_ep_lp_degs$UP, linear_glia_final_scores)
+linear_neuron_up_olig <- get_deg_aucs(olig_ep_lp_degs$UP, linear_neuron_final_scores)
+linear_mn_up_olig <- get_deg_aucs(olig_ep_lp_degs$UP, linear_mn_final_scores)
+
+# Downregulated Olig AUCs ------------------------------------------------
+linear_astro_down_olig <- get_deg_aucs(olig_ep_lp_degs$DOWN, linear_astro_final_scores)
+linear_glia_down_olig <- get_deg_aucs(olig_ep_lp_degs$DOWN, linear_glia_final_scores)
+linear_neuron_down_olig <- get_deg_aucs(olig_ep_lp_degs$DOWN, linear_neuron_final_scores)
+linear_mn_down_olig <- get_deg_aucs(olig_ep_lp_degs$DOWN, linear_mn_final_scores)
+
+# All Olig AUCs ----------------------------------------------------------
+
+linear_astro_all_olig <- get_deg_aucs(olig_ep_lp_degs$ALL, linear_astro_final_scores)
+linear_glia_all_olig <- get_deg_aucs(olig_ep_lp_degs$ALL, linear_glia_final_scores)
+linear_neuron_all_olig <- get_deg_aucs(olig_ep_lp_degs$ALL, linear_neuron_final_scores)
+linear_mn_all_olig <- get_deg_aucs(olig_ep_lp_degs$ALL, linear_mn_final_scores)
+```
+
+### Oligodendrocyte Precursor Cells
+```{r}
+# Upregulated opc AUCs --------------------------------------------------
+
+linear_astro_up_opc <- get_deg_aucs(opc_ep_lp_degs$UP, linear_astro_final_scores)
+linear_glia_up_opc <- get_deg_aucs(opc_ep_lp_degs$UP, linear_glia_final_scores)
+linear_neuron_up_opc <- get_deg_aucs(opc_ep_lp_degs$UP, linear_neuron_final_scores)
+linear_mn_up_opc <- get_deg_aucs(opc_ep_lp_degs$UP, linear_mn_final_scores)
+
+# Downregulated opc AUCs ------------------------------------------------
+linear_astro_down_opc <- get_deg_aucs(opc_ep_lp_degs$DOWN, linear_astro_final_scores)
+linear_glia_down_opc <- get_deg_aucs(opc_ep_lp_degs$DOWN, linear_glia_final_scores)
+linear_neuron_down_opc <- get_deg_aucs(opc_ep_lp_degs$DOWN, linear_neuron_final_scores)
+linear_mn_down_opc <- get_deg_aucs(opc_ep_lp_degs$DOWN, linear_mn_final_scores)
+
+# All opc AUCs ----------------------------------------------------------
+
+linear_astro_all_opc <- get_deg_aucs(opc_ep_lp_degs$ALL, linear_astro_final_scores)
+linear_glia_all_opc <- get_deg_aucs(opc_ep_lp_degs$ALL, linear_glia_final_scores)
+linear_neuron_all_opc <- get_deg_aucs(opc_ep_lp_degs$ALL, linear_neuron_final_scores)
+linear_mn_all_opc <- get_deg_aucs(opc_ep_lp_degs$ALL, linear_mn_final_scores)
+```
+
+### Pan-Neuronal
+```{r}
+# Upregulated pan_neuron AUCs --------------------------------------------------
+
+linear_astro_up_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$UP, linear_astro_final_scores)
+linear_glia_up_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$UP, linear_glia_final_scores)
+linear_neuron_up_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$UP, linear_neuron_final_scores)
+linear_mn_up_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$UP, linear_mn_final_scores)
+
+# Downregulated pan_neuron AUCs ------------------------------------------------
+linear_astro_down_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$DOWN, linear_astro_final_scores)
+linear_glia_down_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$DOWN, linear_glia_final_scores)
+linear_neuron_down_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$DOWN, linear_neuron_final_scores)
+linear_mn_down_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$DOWN, linear_mn_final_scores)
+
+# All pan_neuron AUCs ----------------------------------------------------------
+
+linear_astro_all_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$ALL, linear_astro_final_scores)
+linear_glia_all_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$ALL, linear_glia_final_scores)
+linear_neuron_all_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$ALL, linear_neuron_final_scores)
+linear_mn_all_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$ALL, linear_mn_final_scores)
+```
+
+### Pan-Glial
+```{r}
+# Upregulated pan_glia AUCs --------------------------------------------------
+
+linear_astro_up_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$UP, linear_astro_final_scores)
+linear_glia_up_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$UP, linear_glia_final_scores)
+linear_neuron_up_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$UP, linear_neuron_final_scores)
+linear_mn_up_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$UP, linear_mn_final_scores)
+
+# Downregulated pan_glia AUCs ------------------------------------------------
+linear_astro_down_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$DOWN, linear_astro_final_scores)
+linear_glia_down_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$DOWN, linear_glia_final_scores)
+linear_neuron_down_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$DOWN, linear_neuron_final_scores)
+linear_mn_down_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$DOWN, linear_mn_final_scores)
+
+# All pan_glia AUCs ----------------------------------------------------------
+
+linear_astro_all_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$ALL, linear_astro_final_scores)
+linear_glia_all_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$ALL, linear_glia_final_scores)
+linear_neuron_all_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$ALL, linear_neuron_final_scores)
+linear_mn_all_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$ALL, linear_mn_final_scores)
+```
+
+## Linear Model Tile Plots
+
+### Up in AD Plot
+```{r}
+linear_auc_up_tibble <- tribble(~tissue, ~cell, ~auc,
+                                "Astrocyte", "Astrocyte", linear_astro_up_ast,
+                                "Astrocyte", "Ex. Neuron", linear_astro_up_ex_neu,
+                                "Astrocyte", "In. Neuron", linear_astro_up_in_neu,
+                                "Astrocyte", "Oligodendrocyte", linear_astro_up_olig,
+                                "Astrocyte", "OPC", linear_astro_up_opc,
+                                "Astrocyte", "Pan-Neuronal", linear_astro_up_pan_neuron,
+                                "Astrocyte", "Pan-Glial", linear_astro_up_pan_glia,
+                                "Neuron", "Astrocyte", linear_neuron_up_ast,
+                                "Neuron", "Ex. Neuron", linear_neuron_up_ex_neu,
+                                "Neuron", "In. Neuron", linear_neuron_up_in_neu,
+                                "Neuron", "Oligodendrocyte", linear_neuron_up_olig,
+                                "Neuron", "OPC", linear_neuron_up_opc,
+                                "Neuron", "Pan-Neuronal", linear_neuron_up_pan_neuron,
+                                "Neuron", "Pan-Glial", linear_neuron_up_pan_glia,
+                                "Glia", "Astrocyte", linear_glia_up_ast,
+                                "Glia", "Ex. Neuron", linear_glia_up_ex_neu,
+                                "Glia", "In. Neuron", linear_glia_up_in_neu,
+                                "Glia", "Oligodendrocyte", linear_glia_up_olig,
+                                "Glia", "OPC", linear_glia_up_opc,
+                                "Glia", "Pan-Neuronal", linear_glia_up_pan_neuron,
+                                "Glia", "Pan-Glial", linear_glia_up_pan_glia,
+                                "Multi-Net", "Astrocyte", linear_mn_up_ast,
+                                "Multi-Net", "Ex. Neuron", linear_mn_up_ex_neu,
+                                "Multi-Net", "In. Neuron", linear_mn_up_in_neu,
+                                "Multi-Net", "Oligodendrocyte", linear_mn_up_olig,
+                                "Multi-Net", "OPC", linear_mn_up_opc,
+                                "Multi-Net", "Pan-Neuronal", linear_mn_up_pan_neuron,
+                                "Multi-Net", "Pan-Glial", linear_mn_up_pan_glia)
+
+linear_auc_up_grid <- make_tile_plot(linear_auc_up_tibble, 
+                                     "Linear-SVM AUC for Genes with Higher Expression in Late AD",
+                                     "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/linear_auc_up_grid.png"), 
+       plot = linear_auc_up_grid,
+       dpi = 600)
+```
+
+### Pan-Cell-Type Up in AD Plot
+```{r}
+linear_pan_auc_up_tibble <- tribble(~tissue, ~cell, ~auc,
+                                    "Astrocyte", "Pan-Neuronal", linear_astro_up_pan_neuron,
+                                    "Astrocyte", "Pan-Glial", linear_astro_up_pan_glia,
+                                    "Neuron", "Pan-Neuronal", linear_neuron_up_pan_neuron,
+                                    "Neuron", "Pan-Glial", linear_neuron_up_pan_glia,
+                                    "Glia", "Pan-Neuronal", linear_glia_up_pan_neuron,
+                                    "Glia", "Pan-Glial", linear_glia_up_pan_glia,
+                                    "Multi-Net", "Pan-Neuronal", linear_mn_up_pan_neuron,
+                                    "Multi-Net", "Pan-Glial", linear_mn_up_pan_glia,)
+
+linear_pan_auc_up_grid <- make_tile_plot(linear_pan_auc_up_tibble, 
+                                         "Linear-SVM AUC for Pan-Cell-Type DEGs with Higher Expression in AD",
+                                         "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/linear_pan_auc_up_grid.png"), 
+       plot = linear_pan_auc_up_grid,
+       dpi = 600)
+```
+
+### Down in AD Plot
+```{r}
+linear_auc_down_tibble <- tribble(~tissue, ~cell, ~auc,
+                                  "Astrocyte", "Astrocyte", linear_astro_down_ast,
+                                  "Astrocyte", "Ex. Neuron", linear_astro_down_ex_neu,
+                                  "Astrocyte", "In. Neuron", linear_astro_down_in_neu,
+                                  "Astrocyte", "Oligodendrocyte", linear_astro_down_olig,
+                                  "Astrocyte", "OPC", linear_astro_down_opc,
+                                  "Astrocyte", "Pan-Neuronal", linear_astro_down_pan_neuron,
+                                  "Astrocyte", "Pan-Glial", linear_astro_down_pan_glia,
+                                  "Neuron", "Astrocyte", linear_neuron_down_ast,
+                                  "Neuron", "Ex. Neuron", linear_neuron_down_ex_neu,
+                                  "Neuron", "In. Neuron", linear_neuron_down_in_neu,
+                                  "Neuron", "Oligodendrocyte", linear_neuron_down_olig,
+                                  "Neuron", "OPC", linear_neuron_down_opc,
+                                  "Neuron", "Pan-Neuronal", linear_neuron_down_pan_neuron,
+                                  "Neuron", "Pan-Glial", linear_neuron_down_pan_glia,
+                                  "Glia", "Astrocyte", linear_glia_down_ast,
+                                  "Glia", "Ex. Neuron", linear_glia_down_ex_neu,
+                                  "Glia", "In. Neuron", linear_glia_down_in_neu,
+                                  "Glia", "Oligodendrocyte", linear_glia_down_olig,
+                                  "Glia", "OPC", linear_glia_down_opc,
+                                  "Glia", "Pan-Neuronal", linear_glia_down_pan_neuron,
+                                  "Glia", "Pan-Glial", linear_glia_down_pan_glia,
+                                  "Multi-Net", "Astrocyte", linear_mn_down_ast,
+                                  "Multi-Net", "Ex. Neuron", linear_mn_down_ex_neu,
+                                  "Multi-Net", "In. Neuron", linear_mn_down_in_neu,
+                                  "Multi-Net", "Oligodendrocyte", linear_mn_down_olig,
+                                  "Multi-Net", "OPC", linear_mn_down_opc,
+                                  "Multi-Net", "Pan-Neuronal", linear_mn_down_pan_neuron,
+                                  "Multi-Net", "Pan-Glial", linear_mn_down_pan_glia)
+
+linear_auc_down_grid <- make_tile_plot(linear_auc_down_tibble, 
+                                       "Linear-SVM AUC for Genes with Lower Expression in Late AD",
+                                       "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/linear_auc_down_grid.png"), 
+       plot = linear_auc_down_grid,
+       dpi = 600)
+```
+
+### Pan-Cell-Type Down in AD Plot
+```{r}
+linear_pan_auc_down_tibble <- tribble(~tissue, ~cell, ~auc,
+                                      "Astrocyte", "Pan-Neuronal", linear_astro_down_pan_neuron,
+                                      "Astrocyte", "Pan-Glial", linear_astro_down_pan_glia,
+                                      "Neuron", "Pan-Neuronal", linear_neuron_down_pan_neuron,
+                                      "Neuron", "Pan-Glial", linear_neuron_down_pan_glia,
+                                      "Glia", "Pan-Neuronal", linear_glia_down_pan_neuron,
+                                      "Glia", "Pan-Glial", linear_glia_down_pan_glia,
+                                      "Multi-Net", "Pan-Neuronal", linear_mn_down_pan_neuron,
+                                      "Multi-Net", "Pan-Glial", linear_mn_down_pan_glia,)
+
+linear_pan_auc_down_grid <- make_tile_plot(linear_pan_auc_down_tibble, 
+                                           "Linear-SVM AUC for Pan-Cell-Type DEGs with Lower Expression in AD",
+                                           "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/linear_pan_auc_down_grid.png"), 
+       plot = linear_pan_auc_down_grid,
+       dpi = 600)
+```
+
+### All Differentially Express in AD
+```{r}
+linear_auc_all_tibble <- tribble(~tissue, ~cell, ~auc,
+                                 "Astrocyte", "Astrocyte", linear_astro_all_ast,
+                                 "Astrocyte", "Ex. Neuron", linear_astro_all_ex_neu,
+                                 "Astrocyte", "In. Neuron", linear_astro_all_in_neu,
+                                 "Astrocyte", "Oligodendrocyte", linear_astro_all_olig,
+                                 "Astrocyte", "OPC", linear_astro_all_opc,
+                                 "Astrocyte", "Pan-Neuronal", linear_astro_all_pan_neuron,
+                                 "Astrocyte", "Pan-Glial", linear_astro_all_pan_glia,
+                                 "Neuron", "Astrocyte", linear_neuron_all_ast,
+                                 "Neuron", "Ex. Neuron", linear_neuron_all_ex_neu,
+                                 "Neuron", "In. Neuron", linear_neuron_all_in_neu,
+                                 "Neuron", "Oligodendrocyte", linear_neuron_all_olig,
+                                 "Neuron", "OPC", linear_neuron_all_opc,
+                                 "Neuron", "Pan-Neuronal", linear_neuron_all_pan_neuron,
+                                 "Neuron", "Pan-Glial", linear_neuron_all_pan_glia,
+                                 "Glia", "Astrocyte", linear_glia_all_ast,
+                                 "Glia", "Ex. Neuron", linear_glia_all_ex_neu,
+                                 "Glia", "In. Neuron", linear_glia_all_in_neu,
+                                 "Glia", "Oligodendrocyte", linear_glia_all_olig,
+                                 "Glia", "OPC", linear_glia_all_opc,
+                                 "Glia", "Pan-Neuronal", linear_glia_all_pan_neuron,
+                                 "Glia", "Pan-Glial", linear_glia_all_pan_glia,
+                                 "Multi-Net", "Astrocyte", linear_mn_all_ast,
+                                 "Multi-Net", "Ex. Neuron", linear_mn_all_ex_neu,
+                                 "Multi-Net", "In. Neuron", linear_mn_all_in_neu,
+                                 "Multi-Net", "Oligodendrocyte", linear_mn_all_olig,
+                                 "Multi-Net", "OPC", linear_mn_all_opc,
+                                 "Multi-Net", "Pan-Neuronal", linear_mn_all_pan_neuron,
+                                 "Multi-Net", "Pan-Glial", linear_mn_all_pan_glia)
+
+linear_auc_all_grid <- make_tile_plot(linear_auc_all_tibble, 
+                                       "Linear-SVM AUC for All DEGs in Late AD",
+                                       "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/linear_auc_all_grid.png"), 
+       plot = linear_auc_all_grid,
+       dpi = 600)
+```
+
+### Pan-Cell-Type All DEG Plot
+```{r}
+linear_pan_auc_all_tibble <- tribble(~tissue, ~cell, ~auc,
+                                     "Astrocyte", "Pan-Neuronal", linear_astro_all_pan_neuron,
+                                     "Astrocyte", "Pan-Glial", linear_astro_all_pan_glia,
+                                     "Neuron", "Pan-Neuronal", linear_neuron_all_pan_neuron,
+                                     "Neuron", "Pan-Glial", linear_neuron_all_pan_glia,
+                                     "Glia", "Pan-Neuronal", linear_glia_all_pan_neuron,
+                                     "Glia", "Pan-Glial", linear_glia_all_pan_glia,
+                                     "Multi-Net", "Pan-Neuronal", linear_mn_all_pan_neuron,
+                                     "Multi-Net", "Pan-Glial", linear_mn_all_pan_glia)
+
+linear_pan_auc_all_grid <- make_tile_plot(linear_pan_auc_all_tibble, 
+                                          "Linear-SVM AUC for All Pan-Cell-Type DEGs in AD",
+                                          "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/linear_pan_auc_all_grid.png"), 
+       plot = linear_pan_auc_all_grid,
+       dpi = 600)
+```
+
+## RBF Model Results
+
+### Excitatory Neuron
+```{r}
+# UpRegulated Ex. Neuron AUCs --------------------------------------------
+
+rbf_astro_up_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$UP, rbf_astro_final_scores)
+rbf_glia_up_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$UP, rbf_glia_final_scores)
+rbf_neuron_up_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$UP, rbf_neuron_final_scores)
+rbf_mn_up_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$UP, rbf_mn_final_scores)
+
+# Downregulated Ex. Neuron AUCs ---------------------------------------------
+
+rbf_astro_down_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$DOWN, rbf_astro_final_scores)
+rbf_glia_down_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$DOWN, rbf_glia_final_scores)
+rbf_neuron_down_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$DOWN, rbf_neuron_final_scores)
+rbf_mn_down_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$DOWN, rbf_mn_final_scores)
+
+# All Neuron AUCs ---------------------------------------------------------
+
+rbf_astro_all_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$ALL, rbf_astro_final_scores)
+rbf_glia_all_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$ALL, rbf_glia_final_scores)
+rbf_neuron_all_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$ALL, rbf_neuron_final_scores)
+rbf_mn_all_ex_neu <- get_deg_aucs(ex_neu_ep_lp_degs$ALL, rbf_mn_final_scores)
+```
+
+### Inhibitory Neuron
+```{r}
+# Upregulated In. Neuron AUCs --------------------------------------------
+
+rbf_astro_up_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$UP, rbf_astro_final_scores)
+rbf_glia_up_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$UP, rbf_glia_final_scores)
+rbf_neuron_up_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$UP, rbf_neuron_final_scores)
+rbf_mn_up_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$UP, rbf_mn_final_scores)
+
+# Downregulated In. Neuron AUCs ------------------------------------------
+
+rbf_astro_down_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$DOWN, rbf_astro_final_scores)
+rbf_glia_down_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$DOWN, rbf_glia_final_scores)
+rbf_neuron_down_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$DOWN, rbf_neuron_final_scores)
+rbf_mn_down_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$DOWN, rbf_mn_final_scores)
+
+# All In. Neuron AUCs ----------------------------------------------------
+
+rbf_astro_all_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$ALL, rbf_astro_final_scores)
+rbf_glia_all_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$ALL, rbf_glia_final_scores)
+rbf_neuron_all_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$ALL, rbf_neuron_final_scores)
+rbf_mn_all_in_neu <- get_deg_aucs(in_neu_ep_lp_degs$ALL, rbf_mn_final_scores)
+```
+
+### Astrocyte
+```{r}
+# Upregulated Astrocyte AUCs ----------------------------------------------
+
+rbf_astro_up_ast <- get_deg_aucs(ast_ep_lp_degs$UP, rbf_astro_final_scores)
+rbf_glia_up_ast <- get_deg_aucs(ast_ep_lp_degs$UP, rbf_glia_final_scores)
+rbf_neuron_up_ast <- get_deg_aucs(ast_ep_lp_degs$UP, rbf_neuron_final_scores)
+rbf_mn_up_ast <- get_deg_aucs(ast_ep_lp_degs$UP, rbf_mn_final_scores)
+
+# Downregulated Astrocyte AUCs ------------------------------------------------
+
+rbf_astro_down_ast <- get_deg_aucs(ast_ep_lp_degs$DOWN, rbf_astro_final_scores)
+rbf_glia_down_ast <- get_deg_aucs(ast_ep_lp_degs$DOWN, rbf_glia_final_scores)
+rbf_neuron_down_ast <- get_deg_aucs(ast_ep_lp_degs$DOWN, rbf_neuron_final_scores)
+rbf_mn_down_ast <- get_deg_aucs(ast_ep_lp_degs$DOWN, rbf_mn_final_scores)
+
+# All Astrocyte AUCs ------------------------------------------------------
+
+rbf_astro_all_ast <- get_deg_aucs(ast_ep_lp_degs$ALL, rbf_astro_final_scores)
+rbf_glia_all_ast <- get_deg_aucs(ast_ep_lp_degs$ALL, rbf_glia_final_scores)
+rbf_neuron_all_ast <- get_deg_aucs(ast_ep_lp_degs$ALL, rbf_neuron_final_scores)
+rbf_mn_all_ast <- get_deg_aucs(ast_ep_lp_degs$ALL, rbf_mn_final_scores)
+```
+
+### Microglia
+```{r}
+# Upregulated Micro AUCs --------------------------------------------------
+
+rbf_astro_up_micro <- get_deg_aucs(micro_ep_lp_degs$UP, rbf_astro_final_scores)
+rbf_glia_up_micro <- get_deg_aucs(micro_ep_lp_degs$UP, rbf_glia_final_scores)
+rbf_neuron_up_micro <- get_deg_aucs(micro_ep_lp_degs$UP, rbf_neuron_final_scores)
+rbf_mn_up_micro <- get_deg_aucs(micro_ep_lp_degs$UP, rbf_mn_final_scores)
+
+# Downregulated Micro AUCs ------------------------------------------------
+rbf_astro_down_micro <- get_deg_aucs(micro_ep_lp_degs$DOWN, rbf_astro_final_scores)
+rbf_glia_down_micro <- get_deg_aucs(micro_ep_lp_degs$DOWN, rbf_glia_final_scores)
+rbf_neuron_down_micro <- get_deg_aucs(micro_ep_lp_degs$DOWN, rbf_neuron_final_scores)
+rbf_mn_down_micro <- get_deg_aucs(micro_ep_lp_degs$DOWN, rbf_mn_final_scores)
+
+# All Micro AUCs ----------------------------------------------------------
+
+rbf_astro_all_micro <- get_deg_aucs(micro_ep_lp_degs$ALL, rbf_astro_final_scores)
+rbf_glia_all_micro <- get_deg_aucs(micro_ep_lp_degs$ALL, rbf_glia_final_scores)
+rbf_neuron_all_micro <- get_deg_aucs(micro_ep_lp_degs$ALL, rbf_neuron_final_scores)
+rbf_mn_all_micro <- get_deg_aucs(micro_ep_lp_degs$ALL, rbf_mn_final_scores)
+```
+
+### Oligodendrocyte
+```{r}
+# Upregulated Olig AUCs --------------------------------------------------
+
+rbf_astro_up_olig <- get_deg_aucs(olig_ep_lp_degs$UP, rbf_astro_final_scores)
+rbf_glia_up_olig <- get_deg_aucs(olig_ep_lp_degs$UP, rbf_glia_final_scores)
+rbf_neuron_up_olig <- get_deg_aucs(olig_ep_lp_degs$UP, rbf_neuron_final_scores)
+rbf_mn_up_olig <- get_deg_aucs(olig_ep_lp_degs$UP, rbf_mn_final_scores)
+
+# Downregulated Olig AUCs ------------------------------------------------
+rbf_astro_down_olig <- get_deg_aucs(olig_ep_lp_degs$DOWN, rbf_astro_final_scores)
+rbf_glia_down_olig <- get_deg_aucs(olig_ep_lp_degs$DOWN, rbf_glia_final_scores)
+rbf_neuron_down_olig <- get_deg_aucs(olig_ep_lp_degs$DOWN, rbf_neuron_final_scores)
+rbf_mn_down_olig <- get_deg_aucs(olig_ep_lp_degs$DOWN, rbf_mn_final_scores)
+
+# All Olig AUCs ----------------------------------------------------------
+
+rbf_astro_all_olig <- get_deg_aucs(olig_ep_lp_degs$ALL, rbf_astro_final_scores)
+rbf_glia_all_olig <- get_deg_aucs(olig_ep_lp_degs$ALL, rbf_glia_final_scores)
+rbf_neuron_all_olig <- get_deg_aucs(olig_ep_lp_degs$ALL, rbf_neuron_final_scores)
+rbf_mn_all_olig <- get_deg_aucs(olig_ep_lp_degs$ALL, rbf_mn_final_scores)
+```
+
+### Oligodendrocyte Precursor Cells
+```{r}
+# Upregulated opc AUCs --------------------------------------------------
+
+rbf_astro_up_opc <- get_deg_aucs(opc_ep_lp_degs$UP, rbf_astro_final_scores)
+rbf_glia_up_opc <- get_deg_aucs(opc_ep_lp_degs$UP, rbf_glia_final_scores)
+rbf_neuron_up_opc <- get_deg_aucs(opc_ep_lp_degs$UP, rbf_neuron_final_scores)
+rbf_mn_up_opc <- get_deg_aucs(opc_ep_lp_degs$UP, rbf_mn_final_scores)
+
+# Downregulated opc AUCs ------------------------------------------------
+rbf_astro_down_opc <- get_deg_aucs(opc_ep_lp_degs$DOWN, rbf_astro_final_scores)
+rbf_glia_down_opc <- get_deg_aucs(opc_ep_lp_degs$DOWN, rbf_glia_final_scores)
+rbf_neuron_down_opc <- get_deg_aucs(opc_ep_lp_degs$DOWN, rbf_neuron_final_scores)
+rbf_mn_down_opc <- get_deg_aucs(opc_ep_lp_degs$DOWN, rbf_mn_final_scores)
+
+# All opc AUCs ----------------------------------------------------------
+
+rbf_astro_all_opc <- get_deg_aucs(opc_ep_lp_degs$ALL, rbf_astro_final_scores)
+rbf_glia_all_opc <- get_deg_aucs(opc_ep_lp_degs$ALL, rbf_glia_final_scores)
+rbf_neuron_all_opc <- get_deg_aucs(opc_ep_lp_degs$ALL, rbf_neuron_final_scores)
+rbf_mn_all_opc <- get_deg_aucs(opc_ep_lp_degs$ALL, rbf_mn_final_scores)
+```
+
+### Pan-Neuronal
+```{r}
+# Upregulated pan_neuron AUCs --------------------------------------------------
+
+rbf_astro_up_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$UP, rbf_astro_final_scores)
+rbf_glia_up_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$UP, rbf_glia_final_scores)
+rbf_neuron_up_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$UP, rbf_neuron_final_scores)
+rbf_mn_up_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$UP, rbf_mn_final_scores)
+
+# Downregulated pan_neuron AUCs ------------------------------------------------
+rbf_astro_down_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$DOWN, rbf_astro_final_scores)
+rbf_glia_down_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$DOWN, rbf_glia_final_scores)
+rbf_neuron_down_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$DOWN, rbf_neuron_final_scores)
+rbf_mn_down_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$DOWN, rbf_mn_final_scores)
+
+# All pan_neuron AUCs ----------------------------------------------------------
+
+rbf_astro_all_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$ALL, rbf_astro_final_scores)
+rbf_glia_all_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$ALL, rbf_glia_final_scores)
+rbf_neuron_all_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$ALL, rbf_neuron_final_scores)
+rbf_mn_all_pan_neuron <- get_deg_aucs(pan_neuron_ep_lp_degs$ALL, rbf_mn_final_scores)
+```
+
+### Pan-Glial
+```{r}
+# Upregulated pan_glia AUCs --------------------------------------------------
+
+rbf_astro_up_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$UP, rbf_astro_final_scores)
+rbf_glia_up_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$UP, rbf_glia_final_scores)
+rbf_neuron_up_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$UP, rbf_neuron_final_scores)
+rbf_mn_up_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$UP, rbf_mn_final_scores)
+
+# Downregulated pan_glia AUCs ------------------------------------------------
+rbf_astro_down_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$DOWN, rbf_astro_final_scores)
+rbf_glia_down_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$DOWN, rbf_glia_final_scores)
+rbf_neuron_down_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$DOWN, rbf_neuron_final_scores)
+rbf_mn_down_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$DOWN, rbf_mn_final_scores)
+
+# All pan_glia AUCs ----------------------------------------------------------
+
+rbf_astro_all_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$ALL, rbf_astro_final_scores)
+rbf_glia_all_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$ALL, rbf_glia_final_scores)
+rbf_neuron_all_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$ALL, rbf_neuron_final_scores)
+rbf_mn_all_pan_glia <- get_deg_aucs(pan_glia_ep_lp_degs$ALL, rbf_mn_final_scores)
+```
+
+## RBF Model Tile Plots
+
+### Up in AD Plot
+```{r}
+rbf_auc_up_tibble <- tribble(~tissue, ~cell, ~auc,
+                             "Astrocyte", "Astrocyte", rbf_astro_up_ast,
+                             "Astrocyte", "Ex. Neuron", rbf_astro_up_ex_neu,
+                             "Astrocyte", "In. Neuron", rbf_astro_up_in_neu,
+                             "Astrocyte", "Oligodendrocyte", rbf_astro_up_olig,
+                             "Astrocyte", "OPC", rbf_astro_up_opc,
+                             "Astrocyte", "Pan-Neuronal", rbf_astro_up_pan_neuron,
+                             "Astrocyte", "Pan-Glial", rbf_astro_up_pan_glia,
+                             "Neuron", "Astrocyte", rbf_neuron_up_ast,
+                             "Neuron", "Ex. Neuron", rbf_neuron_up_ex_neu,
+                             "Neuron", "In. Neuron", rbf_neuron_up_in_neu,
+                             "Neuron", "Oligodendrocyte", rbf_neuron_up_olig,
+                             "Neuron", "OPC", rbf_neuron_up_opc,
+                             "Neuron", "Pan-Neuronal", rbf_neuron_up_pan_neuron,
+                             "Neuron", "Pan-Glial", rbf_neuron_up_pan_glia,
+                             "Glia", "Astrocyte", rbf_glia_up_ast,
+                             "Glia", "Ex. Neuron", rbf_glia_up_ex_neu,
+                             "Glia", "In. Neuron", rbf_glia_up_in_neu,
+                             "Glia", "Oligodendrocyte", rbf_glia_up_olig,
+                             "Glia", "OPC", rbf_glia_up_opc,
+                             "Glia", "Pan-Neuronal", rbf_glia_up_pan_neuron,
+                             "Glia", "Pan-Glial", rbf_glia_up_pan_glia,
+                             "Multi-Net", "Astrocyte", rbf_mn_up_ast,
+                             "Multi-Net", "Ex. Neuron", rbf_mn_up_ex_neu,
+                             "Multi-Net", "In. Neuron", rbf_mn_up_in_neu,
+                             "Multi-Net", "Oligodendrocyte", rbf_mn_up_olig,
+                             "Multi-Net", "OPC", rbf_mn_up_opc,
+                             "Multi-Net", "Pan-Neuronal", rbf_mn_up_pan_neuron,
+                             "Multi-Net", "Pan-Glial", rbf_mn_up_pan_glia)
+
+rbf_auc_up_grid <- make_tile_plot(rbf_auc_up_tibble, 
+                                     "RBF-SVM AUC for Genes with Higher Expression in Late AD",
+                                     "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/rbf_auc_up_grid.png"), 
+       plot = rbf_auc_up_grid,
+       dpi = 600)
+```
+
+### Pan-Cell-Type Up in AD Plot
+```{r}
+rbf_pan_auc_up_tibble <- tribble(~tissue, ~cell, ~auc,
+                                 "Astrocyte", "Pan-Neuronal", rbf_astro_up_pan_neuron,
+                                 "Astrocyte", "Pan-Glial", rbf_astro_up_pan_glia,
+                                 "Neuron", "Pan-Neuronal", rbf_neuron_up_pan_neuron,
+                                 "Neuron", "Pan-Glial", rbf_neuron_up_pan_glia,
+                                 "Glia", "Pan-Neuronal", rbf_glia_up_pan_neuron,
+                                 "Glia", "Pan-Glial", rbf_glia_up_pan_glia,
+                                 "Multi-Net", "Pan-Neuronal", rbf_mn_up_pan_neuron,
+                                 "Multi-Net", "Pan-Glial", rbf_mn_up_pan_glia)
+
+rbf_pan_auc_up_grid <- make_tile_plot(rbf_pan_auc_up_tibble, 
+                                      "RBF-SVM AUC for Pan-Cell-Type DEGs with Higher Expression in AD",
+                                      "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/rbf_pan_auc_up_grid.png"), 
+       plot = rbf_pan_auc_up_grid,
+       dpi = 600)
+```
+
+### Down in AD Plot
+```{r}
+rbf_auc_down_tibble <- tribble(~tissue, ~cell, ~auc,
+                               "Astrocyte", "Astrocyte", rbf_astro_down_ast,
+                               "Astrocyte", "Ex. Neuron", rbf_astro_down_ex_neu,
+                               "Astrocyte", "In. Neuron", rbf_astro_down_in_neu,
+                               "Astrocyte", "Oligodendrocyte", rbf_astro_down_olig,
+                               "Astrocyte", "OPC", rbf_astro_down_opc,
+                               "Astrocyte", "Pan-Neuronal", rbf_astro_down_pan_neuron,
+                               "Astrocyte", "Pan-Glial", rbf_astro_down_pan_glia,
+                               "Neuron", "Astrocyte", rbf_neuron_down_ast,
+                               "Neuron", "Ex. Neuron", rbf_neuron_down_ex_neu,
+                               "Neuron", "In. Neuron", rbf_neuron_down_in_neu,
+                               "Neuron", "Oligodendrocyte", rbf_neuron_down_olig,
+                               "Neuron", "OPC", rbf_neuron_down_opc,
+                               "Neuron", "Pan-Neuronal", rbf_neuron_down_pan_neuron,
+                               "Neuron", "Pan-Glial", rbf_neuron_down_pan_glia,
+                               "Glia", "Astrocyte", rbf_glia_down_ast,
+                               "Glia", "Ex. Neuron", rbf_glia_down_ex_neu,
+                               "Glia", "In. Neuron", rbf_glia_down_in_neu,
+                               "Glia", "Oligodendrocyte", rbf_glia_down_olig,
+                               "Glia", "OPC", rbf_glia_down_opc,
+                               "Glia", "Pan-Neuronal", rbf_glia_down_pan_neuron,
+                               "Glia", "Pan-Glial", rbf_glia_down_pan_glia,
+                               "Multi-Net", "Astrocyte", rbf_mn_down_ast,
+                               "Multi-Net", "Ex. Neuron", rbf_mn_down_ex_neu,
+                               "Multi-Net", "In. Neuron", rbf_mn_down_in_neu,
+                               "Multi-Net", "Oligodendrocyte", rbf_mn_down_olig,
+                               "Multi-Net", "OPC", rbf_mn_down_opc,
+                               "Multi-Net", "Pan-Neuronal", rbf_mn_down_pan_neuron,
+                               "Multi-Net", "Pan-Glial", rbf_mn_down_pan_glia)
+
+rbf_auc_down_grid <- make_tile_plot(rbf_auc_down_tibble, 
+                                       "RBF-SVM AUC for Genes with Lower Expression in Late AD",
+                                       "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/rbf_auc_down_grid.png"), 
+       plot = rbf_auc_down_grid,
+       dpi = 600)
+```
+
+### Pan-Cell-Type Down in AD Plot
+```{r}
+rbf_pan_auc_down_tibble <- tribble(~tissue, ~cell, ~auc,
+                                   "Astrocyte", "Pan-Neuronal", rbf_astro_down_pan_neuron,
+                                   "Astrocyte", "Pan-Glial", rbf_astro_down_pan_glia,
+                                   "Neuron", "Pan-Neuronal", rbf_neuron_down_pan_neuron,
+                                   "Neuron", "Pan-Glial", rbf_neuron_down_pan_glia,
+                                   "Glia", "Pan-Neuronal", rbf_glia_down_pan_neuron,
+                                   "Glia", "Pan-Glial", rbf_glia_down_pan_glia,
+                                   "Multi-Net", "Pan-Neuronal", rbf_mn_down_pan_neuron,
+                                   "Multi-Net", "Pan-Glial", rbf_mn_down_pan_glia)
+
+rbf_pan_auc_down_grid <- make_tile_plot(rbf_pan_auc_down_tibble, 
+                                        "RBF-SVM AUC for Pan-Cell-Type DEGs with Lower Expression in AD",
+                                        "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/rbf_pan_auc_down_grid.png"), 
+       plot = rbf_pan_auc_down_grid,
+       dpi = 600)
+```
+
+### All Differentially Express in AD
+```{r}
+rbf_auc_all_tibble <- tribble(~tissue, ~cell, ~auc,
+                              "Astrocyte", "Astrocyte", rbf_astro_all_ast,
+                              "Astrocyte", "Ex. Neuron", rbf_astro_all_ex_neu,
+                              "Astrocyte", "In. Neuron", rbf_astro_all_in_neu,
+                              "Astrocyte", "Oligodendrocyte", rbf_astro_all_olig,
+                              "Astrocyte", "OPC", rbf_astro_all_opc,
+                              "Astrocyte", "Pan-Neuronal", rbf_astro_all_pan_neuron,
+                              "Astrocyte", "Pan-Glial", rbf_astro_all_pan_glia,
+                              "Neuron", "Astrocyte", rbf_neuron_all_ast,
+                              "Neuron", "Ex. Neuron", rbf_neuron_all_ex_neu,
+                              "Neuron", "In. Neuron", rbf_neuron_all_in_neu,
+                              "Neuron", "Oligodendrocyte", rbf_neuron_all_olig,
+                              "Neuron", "OPC", rbf_neuron_all_opc,
+                              "Neuron", "Pan-Neuronal", rbf_neuron_all_pan_neuron,
+                              "Neuron", "Pan-Glial", rbf_neuron_all_pan_glia,
+                              "Glia", "Astrocyte", rbf_glia_all_ast,
+                              "Glia", "Ex. Neuron", rbf_glia_all_ex_neu,
+                              "Glia", "In. Neuron", rbf_glia_all_in_neu,
+                              "Glia", "Oligodendrocyte", rbf_glia_all_olig,
+                              "Glia", "OPC", rbf_glia_all_opc,
+                              "Glia", "Pan-Neuronal", rbf_glia_all_pan_neuron,
+                              "Glia", "Pan-Glial", rbf_glia_all_pan_glia,
+                              "Multi-Net", "Astrocyte", rbf_mn_all_ast,
+                              "Multi-Net", "Ex. Neuron", rbf_mn_all_ex_neu,
+                              "Multi-Net", "In. Neuron", rbf_mn_all_in_neu,
+                              "Multi-Net", "Oligodendrocyte", rbf_mn_all_olig,
+                              "Multi-Net", "OPC", rbf_mn_all_opc,
+                              "Multi-Net", "Pan-Neuronal", rbf_mn_all_pan_neuron,
+                              "Multi-Net", "Pan-Glial", rbf_mn_all_pan_glia)
+
+rbf_auc_all_grid <- make_tile_plot(rbf_auc_all_tibble, 
+                                       "RBF-SVM AUC for All DEGs in Late AD",
+                                       "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/rbf_auc_all_grid.png"), 
+       plot = rbf_auc_all_grid,
+       dpi = 600)
+```
+
+### Pan-Cell-Type All DEGs Plot
+```{r}
+rbf_pan_auc_all_tibble <- tribble(~tissue, ~cell, ~auc,
+                                   "Astrocyte", "Pan-Neuronal", rbf_astro_all_pan_neuron,
+                                   "Astrocyte", "Pan-Glial", rbf_astro_all_pan_glia,
+                                   "Neuron", "Pan-Neuronal", rbf_neuron_all_pan_neuron,
+                                   "Neuron", "Pan-Glial", rbf_neuron_all_pan_glia,
+                                   "Glia", "Pan-Neuronal", rbf_glia_all_pan_neuron,
+                                   "Glia", "Pan-Glial", rbf_glia_all_pan_glia,
+                                   "Multi-Net", "Pan-Neuronal", rbf_mn_all_pan_neuron,
+                                   "Multi-Net", "Pan-Glial", rbf_mn_all_pan_glia)
+
+rbf_pan_auc_all_grid <- make_tile_plot(rbf_pan_auc_all_tibble, 
+                                        "RBF-SVM AUC for All Pan-Cell-Type DEGs in AD",
+                                        "Early Pathology v. Late Pathology") 
+ggsave(here("results/figures/tile_plots/early_path_v_late_path/rbf_pan_auc_all_grid.png"), 
+       plot = rbf_pan_auc_all_grid,
+       dpi = 600)
+```

@@ -1,0 +1,257 @@
+---
+title: "Network Plots"
+author: "Jeff Brabec"
+date: "2/2/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(igraph)
+library(gprofiler2)
+library(ggrepel)
+source(here("src/get_fpr.R"))
+source(here("src/semantic_plot.R"))
+```
+
+## Read in Multi-Network Results and Calculate FPR
+```{r}
+linear_mn_final_scores <- read_csv(here("results/final_scores/linear_mn_final_scores.csv"))
+linear_mn_fpr <- get_fpr(linear_mn_final_scores)
+
+top_mn_genes <- linear_mn_fpr %>% 
+  filter(log_fpr > 2) %>% 
+  arrange(desc(log_fpr))
+
+gene_names <- gconvert(top_mn_genes$gene_name,
+                       organism = "hsapiens",
+                       target = "ENTREZGENE_ACC") 
+
+gene_acc <- gene_names %>% 
+  filter(!duplicated(name)) %>% 
+  select(target) %>% 
+  bind_cols(top_mn_genes) %>% 
+  select(target, gene_name, sensitivity, log_fpr) %>% 
+  mutate(target = as.integer(target))
+
+gene_id_name_dict <- gene_acc %>% select(target, gene_name)
+```
+
+## Read in Networks
+```{r}
+neuron <- read_rds(here("data/human_networks/neuron_top.RData"))
+astrocyte <- read_rds(here("data/human_networks/astrocyte_top.RData"))
+glia <- read_rds(here("data/human_networks/glia_top.RData"))
+```
+
+## Get network subsets for each
+```{r}
+neuron %>% 
+  filter(V1 %in% gene_acc$target & V2 %in% gene_acc$target) %>% 
+  rename(Source = V1, Target = V2, Weight = V3) %>% 
+  left_join(gene_id_name_dict, by = c("Source" = "target")) %>% 
+  left_join(gene_id_name_dict, by = c("Target" = "target")) %>% 
+  select(Source = gene_name.x, Target = gene_name.y, Weight) %>% 
+  write_csv(here("results/gephi/neuron_fpr_2.csv"))
+
+astrocyte %>% 
+  filter(V1 %in% gene_acc$target & V2 %in% gene_acc$target) %>% 
+  rename(Source = V1, Target = V2, Weight = V3) %>% 
+  left_join(gene_id_name_dict, by = c("Source" = "target")) %>% 
+  left_join(gene_id_name_dict, by = c("Target" = "target")) %>% 
+  select(Source = gene_name.x, Target = gene_name.y, Weight) %>% 
+  write_csv(here("results/gephi/astrocyte_fpr_2.csv"))
+
+glia %>% 
+  filter(V1 %in% gene_acc$target & V2 %in% gene_acc$target) %>% 
+  rename(Source = V1, Target = V2, Weight = V3) %>% 
+  left_join(gene_id_name_dict, by = c("Source" = "target")) %>% 
+  left_join(gene_id_name_dict, by = c("Target" = "target")) %>% 
+  select(Source = gene_name.x, Target = gene_name.y, Weight) %>% 
+  write_csv(here("results/gephi/glia_fpr_2.csv"))
+
+
+```
+
+## Ontology Baybeee
+```{r}
+#ASTROCYTE
+astro_clusts <- read_csv(here("results/gephi/astrocyte_fpr_2_default node.csv"))
+
+ast_clust_one <- astro_clusts %>% 
+  filter(`__glayCluster` == 1)
+ast_clust_two <- astro_clusts %>% 
+  filter(`__glayCluster` == 2)
+
+ast_clust_one_ont <- gost(query = ast_clust_one$name,
+                          organism = "hsapiens",
+                          significant = TRUE,
+                          correction_method = "fdr",
+                          sources = "GO:BP")
+
+ast_clust_one_ont_res <- ast_clust_one_ont$result %>% 
+  select(term_id, p_value)
+write_csv(ast_clust_one_ont_res, here("results/gephi/ast_clust_one_ont_res.csv"))
+
+ast_clust_two_ont <- gost(query = ast_clust_two$name,
+                          organism = "hsapiens",
+                          significant = TRUE,
+                          correction_method = "fdr",
+                          sources = "GO:BP")
+
+ast_clust_two_ont_res <- ast_clust_two_ont$result %>% 
+  select(term_id, p_value)
+write_csv(ast_clust_two_ont_res, here("results/gephi/ast_clust_two_ont_res.csv"))
+
+#GLIA
+
+glia_clusts <- read_csv(here("results/gephi/glia_fpr_2 default node.csv"))
+
+glia_clust_one <- glia_clusts %>% 
+  filter(`__glayCluster` == 1)
+glia_clust_two <- glia_clusts %>% 
+  filter(`__glayCluster` == 2)
+
+glia_clust_one_ont <- gost(query = glia_clust_one$name,
+                           organism = "hsapiens",
+                           significant = TRUE,
+                           correction_method = "fdr",
+                           sources = "GO:BP")
+glia_clust_one_ont_res <- glia_clust_one_ont$result %>% 
+  select(term_id, p_value)
+write_csv(glia_clust_one_ont_res, here("results/gephi/glia_clust_one_ont_res.csv"))
+
+glia_clust_two_ont <- gost(query = glia_clust_two$name,
+                           organism = "hsapiens",
+                           significant = TRUE,
+                           correction_method = "fdr",
+                           sources = "GO:BP")
+glia_clust_two_ont_res <- glia_clust_two_ont$result %>% 
+  select(term_id, p_value)
+write_csv(glia_clust_two_ont_res, here("results/gephi/glia_clust_two_ont_res.csv"))
+
+# NEURON
+
+neuron_clusts <- read_csv(here("results/gephi/neuron_fpr_2 default node.csv"))
+
+neuron_clust_one <- neuron_clusts %>% 
+  filter(`__glayCluster` == 1)
+neuron_clust_two <- neuron_clusts %>% 
+  filter(`__glayCluster` == 2)
+neuron_clust_three <- neuron_clusts %>% 
+  filter(`__glayCluster` == 3)
+
+neuron_clust_one_ont <- gost(query = neuron_clust_one$name,
+                             organism = "hsapiens",
+                             significant = TRUE,
+                             correction_method = "fdr",
+                             sources = "GO:BP")
+neuron_clust_one_ont_res <- neuron_clust_one_ont$result %>% 
+  select(term_id, p_value)
+write_csv(neuron_clust_one_ont_res, here("results/gephi/neuron_clust_one_ont_res.csv"))
+
+neuron_clust_two_ont <- gost(query = neuron_clust_two$name,
+                             organism = "hsapiens",
+                             significant = TRUE,
+                             correction_method = "fdr",
+                             sources = "GO:BP")
+neuron_clust_two_ont_res <- neuron_clust_two_ont$result %>% 
+  select(term_id, p_value)
+write_csv(neuron_clust_two_ont_res, here("results/gephi/neuron_clust_two_ont_res.csv"))
+
+neuron_clust_three_ont <- gost(query = neuron_clust_three$name,
+                               organism = "hsapiens",
+                               significant = TRUE,
+                               correction_method = "fdr",
+                               sources = "GO:BP")
+neuron_clust_three_ont_res <- neuron_clust_three_ont$result %>% 
+  select(term_id, p_value)
+write_csv(neuron_clust_three_ont_res, here("results/gephi/neuron_clust_three_ont_res.csv"))
+
+
+```
+
+## REVIGO 
+```{r}
+ast_clust_one_revigo <- semantic_plot(here("results/gephi/ast_clust_one_revigo_res.csv"),
+                                      title = "Atrocyte Cluster One",
+                                      subtitle = "",
+                                      disp = .05)
+ggsave(here("results/figures/ast_clust_one_semantic_plot.png"), 
+       ast_clust_one_revigo,
+       height = 10,
+       width = 10,
+       units = "in",
+       dpi = 600)
+ast_clust_two_revigo <- semantic_plot(here("results/gephi/ast_clust_two_revigo_res.csv"),
+                                      title = "Astrocyte Cluster Two",
+                                      subtitle = "",
+                                      disp = .05)
+ggsave(here("results/figures/ast_clust_two_semantic_plot.png"), 
+       ast_clust_two_revigo,
+       height = 10,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+#GLIA
+glia_clust_one_revigo <- semantic_plot(here("results/gephi/glia_clust_one_revigo_res.csv"),
+                                       title = "Glia Cluster One",
+                                       subtitle = "",
+                                       disp = .05)
+ggsave(here("results/figures/glia_clust_one_semantic_plot.png"), 
+       glia_clust_one_revigo,
+       height = 10,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+glia_clust_two_revigo <- semantic_plot(here("results/gephi/glia_clust_two_revigo_res.csv"),
+                                       title = "Glia Cluster Two",
+                                       subtitle = "",
+                                       disp = .05)
+ggsave(here("results/figures/glia_clust_two_semantic_plot.png"), 
+       glia_clust_two_revigo,
+       height = 10,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+#NEURON
+neuron_clust_one_revigo <- semantic_plot(here("results/gephi/neuron_clust_one_revigo_res.csv"),
+                                         title = "Neuron Cluster One",
+                                         subtitle = "",
+                                         disp = .05)
+ggsave(here("results/figures/neuron_clust_one_semantic_plot.png"), 
+       neuron_clust_one_revigo,
+       height = 10,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+neuron_clust_two_revigo <- semantic_plot(here("results/gephi/neuron_clust_two_revigo_res.csv"),
+                                         title = "Neuron Cluster Two",
+                                         subtitle = "",
+                                         disp = .05)
+ggsave(here("results/figures/neuron_clust_two_semantic_plot.png"), 
+       neuron_clust_two_revigo,
+       height = 10,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+neuron_clust_three_revigo <- semantic_plot(here("results/gephi/neuron_clust_three_revigo_res.csv"),
+                                           title = "Neuron Cluster Three",
+                                           subtitle = "",
+                                           disp = .05)
+ggsave(here("results/figures/neuron_clust_three_semantic_plot.png"), 
+       neuron_clust_three_revigo,
+       height = 10,
+       width = 10,
+       units = "in",
+       dpi = 600)
+```
+

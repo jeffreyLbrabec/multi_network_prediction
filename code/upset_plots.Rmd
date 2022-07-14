@@ -1,0 +1,441 @@
+---
+title: "Upset Plots"
+author: "Jeff Brabec"
+date: "10/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+library(readxl)
+library(ggupset)
+library(hrbrthemes)
+library(patchwork)
+source(here("src/get_scrnaseq_data.R"))
+source(here("src/make_upset_plot.R"))
+```
+
+# No Pathology v. All Pathology
+
+## Read in scRNAseq Data
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. The abbreviations `np_ap` designate No-pathology v. Any Pathology. Both early and Late pathology groups are included in "any pathology".
+
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/ex_neu_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/in_neu_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/ast_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/micro_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/olig_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/opc_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+
+## Upset Plots
+First let's get the color palette we'll use for this set of plots
+```{r}
+np_ap_colors <- viridis(n = 3)
+```
+
+### Upregulated Upset Plot
+```{r}
+en_np_ap_up_degs <- ex_neu_np_ap_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "Ex. Neuron")
+in_np_ap_up_degs <- in_neu_np_ap_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "In. Neuron")
+ast_np_ap_up_degs <- ast_np_ap_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "Astrocyte")
+micro_np_ap_up_degs <- micro_np_ap_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "Microglia")
+
+np_ap_up_deg_list <- list(en_up = en_np_ap_up_degs, 
+                          in_up = in_np_ap_up_degs, 
+                          ast_up = ast_np_ap_up_degs, 
+                          micro_up = micro_np_ap_up_degs)
+
+np_ap_up_upset_plot <- make_upset_plot(np_ap_up_deg_list, 
+                                       "Shared Up-Regulated Genes", 
+                                       "No Pathology v. All Pathology",
+                                       fill = np_ap_colors[1]) +
+  theme(plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"))
+
+ggsave(here("results/figures/upset_plots/no_path_v_all_path/np_ap_up_upset_plot.png"),
+       np_ap_up_upset_plot,
+       height = 7,
+       width = 10,
+       units = "in",
+       dpi = 600)
+```
+
+### Downregulated Upset Plot
+```{r}
+en_np_ap_down_degs <- ex_neu_np_ap_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "Ex. Neuron")
+in_np_ap_down_degs <- in_neu_np_ap_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "In. Neuron")
+ast_np_ap_down_degs <- ast_np_ap_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "Astrocyte")
+micro_np_ap_down_degs <- micro_np_ap_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "Microglia")
+
+np_ap_down_deg_list <- list(en_down = en_np_ap_down_degs, 
+                            in_down = in_np_ap_down_degs, 
+                            ast_down = ast_np_ap_down_degs, 
+                            micro_down = micro_np_ap_down_degs)
+
+np_ap_down_upset_plot <- make_upset_plot(np_ap_down_deg_list, 
+                                         "Shared Down-Regulated Genes", 
+                                         "No Pathology v. All Pathology",
+                                         fill = np_ap_colors[2]) +
+  theme(plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"))
+
+ggsave(here("results/figures/upset_plots/no_path_v_all_path/np_ap_down_upset_plot.png"),
+       np_ap_down_upset_plot,
+       height = 7,
+       width = 10,
+       units = "in",
+       dpi = 600)
+```
+
+### All Upset Plot
+```{r}
+en_np_ap_all_degs <- ex_neu_np_ap_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "Ex. Neuron")
+in_np_ap_all_degs <- in_neu_np_ap_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "In. Neuron")
+ast_np_ap_all_degs <- ast_np_ap_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "Astrocyte")
+micro_np_ap_all_degs <- micro_np_ap_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "Microglia")
+
+np_ap_all_deg_list <- list(en_down = en_np_ap_all_degs, 
+                           in_down = in_np_ap_all_degs, 
+                           ast_down = ast_np_ap_all_degs, 
+                           micro_down = micro_np_ap_all_degs)
+
+np_ap_all_upset_plot <- make_upset_plot(np_ap_all_deg_list, 
+                                        "Shared All DEGs", 
+                                        "No Pathology v. All Pathology",
+                                        fill = np_ap_colors[3]) +
+  theme(plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"))
+
+ggsave(here("results/figures/upset_plots/no_path_v_all_path/np_ap_all_upset_plot.png"),
+       np_ap_all_upset_plot,
+       height = 7,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Combine the three plots
+```{r}
+np_ap_upset <- np_ap_up_upset_plot / np_ap_down_upset_plot / np_ap_all_upset_plot
+
+np_ap_upset_comb <- np_ap_upset + plot_annotation(tag_levels = 'A')
+
+ggsave(here("results/figures/upset_plots/no_path_v_all_path/np_ap_upset_comb.png"),
+       np_ap_upset_comb,
+       height = 12,
+       width = 10,
+       units = "in",
+       dpi = 600)
+```
+
+# No Pathology v. Early Pathology
+
+## Read in scRNAseq Data
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. 
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ex_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/in_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ast_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/micro_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/olig_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/opc_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+## Upset Plots
+First let's get the color palette we'll use for this set of plots
+```{r}
+np_ep_colors <- turbo(n = 3)
+```
+
+### Upregulated Upset Plot
+```{r}
+en_np_ep_up_degs <- ex_neu_np_ep_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "Ex. Neuron")
+in_np_ep_up_degs <- in_neu_np_ep_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "In. Neuron")
+ast_np_ep_up_degs <- ast_np_ep_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "Astrocyte")
+olig_np_ep_up_degs <- olig_np_ep_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "Olig.")
+
+np_ep_up_deg_list <- list(en_up = en_np_ep_up_degs, 
+                          in_up = in_np_ep_up_degs, 
+                          ast_up = ast_np_ep_up_degs, 
+                          olig_up = olig_np_ep_up_degs)
+
+np_ep_up_upset_plot <- make_upset_plot(np_ep_up_deg_list, 
+                                       "Shared Up-Regulated Genes", 
+                                       "No Pathology v. Early Pathology",
+                                       fill = np_ep_colors[1]) +
+  theme(plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"))
+
+ggsave(here("results/figures/upset_plots/no_path_v_early_path/np_ep_up_upset_plot.png"),
+       np_ep_up_upset_plot,
+       height = 4,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Downregulated Upset Plot
+```{r}
+en_np_ep_down_degs <- ex_neu_np_ep_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "Ex. Neuron")
+in_np_ep_down_degs <- in_neu_np_ep_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "In. Neuron")
+ast_np_ep_down_degs <- ast_np_ep_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "Astrocyte")
+micro_np_ep_down_degs <- micro_np_ep_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "Microglia")
+
+np_ep_down_deg_list <- list(en_down = en_np_ep_down_degs, 
+                            in_down = in_np_ep_down_degs, 
+                            ast_down = ast_np_ep_down_degs, 
+                            micro_down = micro_np_ep_down_degs)
+
+np_ep_down_upset_plot <- make_upset_plot(np_ep_down_deg_list, 
+                                         "Shared Down-Regulated Genes", 
+                                         "No Pathology v. Early Pathology",
+                                         fill = np_ep_colors[2]) +
+  theme(plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"))
+
+ggsave(here("results/figures/upset_plots/no_path_v_early_path/np_ep_down_upset_plot.png"),
+       np_ep_down_upset_plot,
+       height = 7,
+       width = 10,
+       units = "in",
+       dpi = 600)
+```
+
+### All Upset Plot
+```{r}
+en_np_ep_all_degs <- ex_neu_np_ep_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "Ex. Neuron")
+in_np_ep_all_degs <- in_neu_np_ep_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "In. Neuron")
+ast_np_ep_all_degs <- ast_np_ep_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "Astrocyte")
+olig_np_ep_all_degs <- olig_np_ep_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "Olig.")
+
+np_ep_all_deg_list <- list(en_down = en_np_ep_all_degs, 
+                           in_down = in_np_ep_all_degs, 
+                           ast_down = ast_np_ep_all_degs, 
+                           olig_down = olig_np_ep_all_degs)
+
+np_ep_all_upset_plot <- make_upset_plot(np_ep_all_deg_list, 
+                                        "Shared All DEGs", 
+                                        "No Pathology v. Early Pathology",
+                                        fill = np_ep_colors[3]) +
+  theme(plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"),
+        axis.text.y = element_text(size = 15),
+        axis.title.y = element_text(size = 20))
+
+ggsave(here("results/figures/upset_plots/no_path_v_early_path/np_ep_all_upset_plot.png"),
+       np_ep_all_upset_plot,
+       height = 4,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Combine the three plots
+```{r}
+np_ep_upset <- np_ep_up_upset_plot / np_ep_down_upset_plot
+
+np_ep_upset_comb <- np_ep_upset + plot_annotation(tag_levels = 'A')
+
+ggsave(here("results/figures/upset_plots/no_path_v_early_path/np_ep_upset_comb.png"),
+       np_ep_upset_comb,
+       height = 7,
+       width = 5,
+       units = "in",
+       dpi = 600)
+```
+
+# Early Pathology v. Late Pathology
+
+## Read in scRNAseq Data
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. Where `ep_lp` denotes early versus late pathology comparison.
+```{r}
+#Excitatory Neuron Data
+ex_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ex_neu_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/in_neu_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ast_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/micro_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/olig_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/opc_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+## Upset Plots
+First let's get the color palette we'll use for this set of plots
+```{r}
+ep_lp_colors <- mako(n = 3)
+```
+
+
+### Upregulated Upset Plot
+```{r}
+en_ep_lp_up_degs <- ex_neu_ep_lp_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "Ex. Neuron")
+in_ep_lp_up_degs <- in_neu_ep_lp_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "In. Neuron")
+ast_ep_lp_up_degs <- ast_ep_lp_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "Astrocyte")
+micro_ep_lp_up_degs <- micro_ep_lp_degs$UP %>% select(gene) %>% 
+  mutate(cell_expr = "Microglia")
+
+ep_lp_up_deg_list <- list(en_up = en_ep_lp_up_degs, 
+                          in_up = in_ep_lp_up_degs, 
+                          ast_up = ast_ep_lp_up_degs, 
+                          micro_up = micro_ep_lp_up_degs)
+
+ep_lp_up_upset_plot <- make_upset_plot(ep_lp_up_deg_list, 
+                                       "Shared Up-Regulated Genes", 
+                                       "Early Pathology v. Late Pathology", 
+                                       fill = ep_lp_colors[1]) +
+  theme(plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"))
+
+ggsave(here("results/figures/upset_plots/early_path_v_late_path/ep_lp_up_upset_plot.png"),
+       ep_lp_up_upset_plot,
+       height = 7,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Downregulated Upset Plot
+```{r}
+en_ep_lp_down_degs <- ex_neu_ep_lp_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "Ex. Neuron")
+in_ep_lp_down_degs <- in_neu_ep_lp_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "In. Neuron")
+ast_ep_lp_down_degs <- ast_ep_lp_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "Astrocyte")
+micro_ep_lp_down_degs <- micro_ep_lp_degs$DOWN %>% select(gene) %>% 
+  mutate(cell_expr = "Microglia")
+
+ep_lp_down_deg_list <- list(en_down = en_ep_lp_down_degs, 
+                            in_down = in_ep_lp_down_degs, 
+                            ast_down = ast_ep_lp_down_degs, 
+                            micro_down = micro_ep_lp_down_degs)
+
+ep_lp_down_upset_plot <- make_upset_plot(ep_lp_down_deg_list, 
+                                         "Shared Down-Regulated Genes", 
+                                         "Early Pathology v. Late Pathology", 
+                                         fill = ep_lp_colors[2]) +
+  theme(plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"))
+
+ggsave(here("results/figures/upset_plots/early_path_v_late_path/ep_lp_down_upset_plot.png"),
+       ep_lp_down_upset_plot,
+       height = 7,
+       width = 10,
+       units = "in",
+       dpi = 600)
+```
+
+### All Upset Plot
+```{r}
+en_ep_lp_all_degs <- ex_neu_ep_lp_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "Ex. Neuron")
+in_ep_lp_all_degs <- in_neu_ep_lp_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "In. Neuron")
+ast_ep_lp_all_degs <- ast_ep_lp_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "Astrocyte")
+olig_ep_lp_all_degs <- olig_ep_lp_degs$ALL %>% select(gene) %>% 
+  mutate(cell_expr = "Olig.")
+
+ep_lp_all_deg_list <- list(en_all = en_ep_lp_all_degs, 
+                           in_all = in_ep_lp_all_degs, 
+                           ast_all = ast_ep_lp_all_degs, 
+                           olig_all =olig_ep_lp_all_degs)
+
+ep_lp_all_upset_plot <- make_upset_plot(ep_lp_all_deg_list, 
+                                        "Shared All DEGs", 
+                                        "Early Pathology v. Late Pathology", 
+                                        fill = ep_lp_colors[2]) +
+  theme(plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"),
+        axis.text.y = element_text(size = 15),
+        axis.title.y = element_text(size = 20))
+
+ 
+
+ggsave(here("results/figures/upset_plots/early_path_v_late_path/ep_lp_all_upset_plot.png"),
+       ep_lp_all_upset_plot,
+       height = 4,
+       width = 10,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Combine the three plots
+```{r}
+ep_lp_upset <- ep_lp_up_upset_plot / ep_lp_down_upset_plot
+
+ep_lp_upset_comb <- ep_lp_upset + plot_annotation(tag_levels = 'A')
+
+ggsave(here("results/figures/upset_plots/early_path_v_late_path/ep_lp_upset_comb.png"),
+       ep_lp_upset_comb,
+       height = 7,
+       width = 5,
+       units = "in",
+       dpi = 600)
+```
+

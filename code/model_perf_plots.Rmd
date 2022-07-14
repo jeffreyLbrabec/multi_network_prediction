@@ -1,0 +1,263 @@
+---
+title: "Model Performance"
+author: "Jeff Brabec"
+date: "9/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+library(ggpubr)
+source(here("src/get_deg_aucs.R"))
+source(here("src/convert_to_names.R"))
+source(here("src/final_auc_processing.R"))
+```
+
+## Look at mean AUCs
+```{r}
+astro_linear_aucs <- read_rds(here("results/astro_linear_final_predictions/final_astro_auc.rds")) 
+
+mean_astro_linear_auc <- astro_linear_aucs %>% 
+  summarize(mean_linear_astro = mean(assessment_auc))
+
+astro_rbf_aucs <- read_rds(here("results/astro_rbf_final_predictions/final_astro_rbf_auc.rds"))
+
+mean_astro_rbf_auc <- astro_rbf_aucs %>% 
+  summarize(mean_rbf_astro = mean(assessment_auc))
+
+glia_linear_aucs <- read_rds(here("results/glia_linear_final_predictions/final_glia_auc.rds"))
+
+mean_glia_linear_auc <- glia_linear_aucs %>% 
+  summarize(mean_linear_glia = mean(assessment_auc))
+
+glia_rbf_aucs <- read_rds(here("results/glia_rbf_final_predictions/final_glia_rbf_auc.rds"))
+
+mean_glia_rbf_auc <- glia_rbf_aucs %>% 
+  summarize(mean_rbf_glia = mean(assessment_auc))
+
+neuron_linear_aucs <- read_rds(here("results/neuron_linear_final_predictions/final_neuron_auc.rds"))
+
+mean_neuron_linear_auc <- neuron_linear_aucs %>% 
+  summarize(mean_linear_neuron = mean(assessment_auc))
+
+neuron_rbf_aucs <- read_rds(here("results/neuron_rbf_final_predictions/final_neuron_rbf_auc.rds"))
+
+mean_neuron_rbf_auc <- neuron_rbf_aucs %>% 
+  summarize(mean_rbf_neuron = mean(assessment_auc))
+
+multi_net_linear <- read_rds(here(here("results/multi_net_linear_final_predictions/final_multi_net_linear_auc.rds")))
+
+mean_mn_linear <- multi_net_linear %>% 
+  summarize(mean_linear_mn = mean(assessment_auc))
+
+multi_net_rbf <- read_rds(here("results/multi_net_rbf_final_predictions/final_multi_net_rbf_auc.rds"))
+
+mean_mn_rbf <- multi_net_rbf %>% 
+  summarize(mean_rbf_mn = mean(assessment_auc))
+```
+
+```{r}
+astro_line_prep <- astro_linear_aucs %>% 
+  mutate(tissue = "Astrocyte",
+         mod_type = "Linear-SVM")
+
+astro_rbf_prep <- astro_rbf_aucs %>% 
+  mutate(tissue = "Astrocyte",
+         mod_type = "Gaussian-SVM")
+
+glia_line_prep <- glia_linear_aucs %>% 
+  mutate(tissue = "Glia",
+         mod_type = "Linear-SVM")
+
+glia_rbf_prep <- glia_rbf_aucs %>% 
+  mutate(tissue = "Glia",
+         mod_type = "Gaussian-SVM")
+
+neuron_line_prep <- neuron_linear_aucs %>% 
+  mutate(tissue = "Neuron",
+         mod_type = "Linear-SVM")
+
+neuron_rbf_prep <- neuron_rbf_aucs %>% 
+  mutate(tissue = "Neuron",
+         mod_type = "Gaussian-SVM")
+
+mn_line_prep <- multi_net_linear %>% 
+  mutate(tissue = "Multi-Net",
+         mod_type = "Linear-SVM")
+
+mn_rbf_prep <- multi_net_rbf %>% 
+  mutate(tissue = "Multi-Net",
+         mod_type = "Gaussian-SVM")
+
+box_df <- bind_rows(astro_line_prep,
+                    astro_rbf_prep,
+                    glia_line_prep,
+                    glia_rbf_prep,
+                    neuron_line_prep,
+                    neuron_rbf_prep,
+                    mn_line_prep,
+                    mn_rbf_prep)
+
+testing_boxes <- ggplot(box_df, aes(x = reorder(tissue, assessment_auc), y = assessment_auc)) +
+  geom_boxplot(aes(color = tissue, fill = tissue), alpha = 0.5) +
+  geom_point() +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  stat_compare_means(comparisons = list(c("Neuron", "Multi-Net"),
+                                        c("Astrocyte", "Multi-Net"),
+                                        c("Glia", "Multi-Net")),
+                     aes(label = ..p.signif..), 
+                     method = "t.test") +
+  labs(x = "Tissue Network",
+       y = "AUC",
+       title = "Comparison of Testing AUC Values") +
+  facet_wrap(~ mod_type, scales = "free_y") +
+  theme_light() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5))
+ggsave(here("results/figures/testing_auc_boxes.png"),
+       testing_boxes,
+       dpi = 600)
+
+training_boxes <- ggplot(box_df, aes(x = reorder(tissue, auc), y = auc)) +
+  geom_boxplot(aes(color = tissue, fill = tissue), alpha = 0.5) +
+  geom_point() +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  stat_compare_means(comparisons = list(c("Neuron", "Multi-Net"),
+                                        c("Astrocyte", "Multi-Net"),
+                                        c("Glia", "Multi-Net")),
+                     aes(label = ..p.signif..),
+                     method = "t.test") +
+  labs(x = "Tissue Network",
+       y = "AUC",
+       title = "Comparison of Training AUC Values") +
+  facet_wrap(~ mod_type) +
+  theme_light() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5))
+ggsave(here("results/figures/training_auc_boxes.png"),
+       training_boxes,
+       dpi = 600)
+```
+
+
+```{r}
+lsvm_boxes <- box_df %>% 
+  filter(mod_type == "Linear-SVM") %>% 
+  pivot_longer(cols = contains("auc"), names_to = "auc_type", values_to = "auc_vals") %>% 
+  mutate(auc_type = if_else(auc_type == "auc", "Training AUC", "Testing AUC")) %>% 
+  mutate(auc_type = fct_relevel(auc_type, "Training AUC", "Testing AUC")) %>% 
+  ggplot(aes(x = reorder(tissue, auc_vals), y = auc_vals)) +
+  geom_boxplot(aes(color = tissue, fill = tissue), alpha = 0.5) +
+  geom_point() +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  stat_compare_means(comparisons = list(c("Neuron", "Multi-Net"),
+                                        c("Glia", "Multi-Net"),
+                                        c("Astrocyte", "Multi-Net")),
+                     aes(label = ..p.value..), 
+                     method = "t.test") +
+  labs(x = "",
+       y = "AUC") +
+  facet_wrap(~ auc_type) +
+  ylim(.5, 1) +
+  theme_light() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 20, angle = 45, vjust = 0.5),
+        axis.text.y = element_text(size = 20),
+        axis.title.y = element_text(size = 25),
+        strip.text = element_text(size = 30))
+ggsave(here("results/figures/lsvm_boxes.png"),
+       lsvm_boxes,
+       height = 8,
+       width = 10,
+       units = "in",
+       dpi = 600)
+```
+
+```{r}
+rbf_boxes <- box_df %>% 
+  filter(mod_type == "Gaussian-SVM") %>% 
+  pivot_longer(cols = contains("auc"), names_to = "auc_type", values_to = "auc_vals") %>% 
+  mutate(auc_type = if_else(auc_type == "auc", "Training AUC", "Testing AUC")) %>% 
+  mutate(auc_type = fct_relevel(auc_type, "Training AUC", "Testing AUC")) %>% 
+  ggplot(aes(x = reorder(tissue, auc_vals), y = auc_vals)) +
+  geom_boxplot(aes(color = tissue, fill = tissue), alpha = 0.5) +
+  geom_point() +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  stat_compare_means(comparisons = list(c("Neuron", "Multi-Net"),
+                                        c("Glia", "Multi-Net"),
+                                        c("Astrocyte", "Multi-Net")),
+                     aes(label = ..p.signif..), 
+                     method = "t.test") +
+  labs(x = "",
+       y = "AUC") +
+  facet_wrap(~ auc_type) +
+  ylim(.5, 1) +
+  theme_light() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 20, angle = 45, vjust = 0.5),
+        axis.text.y = element_text(size = 20),
+        axis.title.y = element_text(size = 25),
+        strip.text = element_text(size = 30))
+ggsave(here("results/figures/rbf_boxes.png"),
+       rbf_boxes,
+       height = 8,
+       width = 10,
+       units = "in",
+       dpi = 600)
+```
+
+
+
+## Average AUCs
+```{r}
+mean_auc_tissue <- bind_cols(mean_astro_linear_auc, 
+                             mean_astro_rbf_auc, 
+                             mean_glia_linear_auc, 
+                             mean_glia_rbf_auc, 
+                             mean_neuron_linear_auc, 
+                             mean_neuron_rbf_auc, 
+                             mean_mn_linear, 
+                             mean_mn_rbf) %>% 
+  pivot_longer(cols = everything(), names_to = "mean_type", values_to = "auc") %>% 
+  separate(mean_type, into = c("mean", "mod_type", "tissue")) %>% 
+  select(-mean) %>% 
+  mutate(tissue = case_when(str_detect(tissue, "astro") ~ "Astrocyte",
+                            str_detect(tissue, "glia") ~ "Glia",
+                            str_detect(tissue, "neuron") ~ "Neuron",
+                            str_detect(tissue, "mn") ~ "Multi-Net"),
+         mod_type = str_to_title(mod_type)) %>% 
+  ggplot(aes(x = tissue, y = auc, fill = tissue)) + 
+  geom_col() + 
+  scale_fill_viridis_d() + 
+  facet_wrap(~mod_type) + 
+  labs(x = "",
+       y = "AUC",
+       title = "Mean AUC for Each Tissue by Model") +
+  theme_light() +
+  theme(legend.position = "none")
+
+```
+
+
+```{r}
+box_df %>% 
+  filter(mod_type == "Linear-SVM") %>% 
+  pivot_longer(cols = contains("auc"), names_to = "auc_type", values_to = "auc_vals") %>% 
+  mutate(auc_type = if_else(auc_type == "auc", "Training AUC", "Testing AUC")) %>% 
+  mutate(auc_type = fct_relevel(auc_type, "Training AUC", "Testing AUC")) %>% 
+  group_by(auc_type, tissue) %>% 
+  summarize(avg_perf = mean(auc_vals),
+            mod_var = var(auc_vals))
+```
+

@@ -1,0 +1,139 @@
+---
+title: "Gene Expression Heatmap"
+author: "Jeff Brabec"
+date: "1/31/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+library(readxl)
+library(ggrepel)
+library(safejoin)
+source(here("src/get_deg_aucs.R"))
+source(here("src/convert_to_names.R"))
+source(here("src/final_auc_processing.R"))
+source(here("src/gene_rank_plotr.R"))
+source(here("src/get_plot_cs.R"))
+source(here("src/make_pan_cell_sets.R"))
+source(here("src/get_fpr.R"))
+```
+
+## Read in Scores
+
+```{r}
+#Linear Results
+linear_astro_final_scores <- read_csv(here("results/final_scores/linear_astro_final_scores.csv"))
+linear_glia_final_scores <- read_csv(here("results/final_scores/linear_glia_final_scores.csv"))
+linear_neuron_final_scores <- read_csv(here("results/final_scores/linear_neuron_final_scores.csv"))
+linear_mn_final_scores <- read_csv(here("results/final_scores/linear_mn_final_scores.csv"))
+```
+
+## Calculate FPR and TPR for Genes
+```{r}
+linear_astro_fpr <- get_fpr(linear_astro_final_scores)
+linear_glia_fpr <- get_fpr(linear_glia_final_scores)
+linear_neuron_fpr <- get_fpr(linear_neuron_final_scores)
+linear_mn_fpr <- get_fpr(linear_mn_final_scores)
+```
+
+## No Path v. Early Path
+
+### Read in scRNAseq Data
+
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score.
+
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ex_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/in_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ast_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/micro_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/olig_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/opc_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+## Combine Multi-net Scores with DEG data
+```{r}
+ex_mn_genes <- ex_neu_np_ep_degs$ALL %>% 
+  inner_join(linear_mn_fpr, by = c("gene" = "gene_name")) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>%
+  filter(log_p > -log10(0.05), log_fpr > 1) %>% 
+  select(gene, log_fpr, log_p) %>% 
+  mutate(cell_type = "Ex. Neuron")
+
+in_mn_genes <- in_neu_np_ep_degs$ALL %>% 
+  inner_join(linear_mn_fpr, by = c("gene" = "gene_name")) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>% filter(log_p > -log10(0.05))
+  filter(log_p > -log10(0.05), log_fpr > 1) %>% 
+  select(gene, log_fpr, log_p) %>% 
+  mutate(cell_type = "In. Neuron")
+
+ast_mn_genes <- ast_np_ep_degs$ALL %>% 
+  inner_join(linear_mn_fpr, by = c("gene" = "gene_name")) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>% 
+  filter(log_p > -log10(0.05), log_fpr > 1) %>% 
+  select(gene, log_fpr, log_p) %>% 
+  mutate(cell_type = "Astrocyte")
+
+micro_mn_genes <- micro_np_ep_degs$ALL %>% 
+  inner_join(linear_mn_fpr, by = c("gene" = "gene_name")) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>% 
+  filter(log_p > -log10(0.05), log_fpr > 1) %>% 
+  select(gene, log_fpr, log_p) %>% 
+  mutate(cell_type = "Microglia")
+
+olig_mn_genes <- olig_np_ep_degs$ALL %>% 
+  inner_join(linear_mn_fpr, by = c("gene" = "gene_name")) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>% 
+  filter(log_p > -log10(0.05), log_fpr > 1) %>% 
+  select(gene, log_fpr, log_p) %>% 
+  mutate(cell_type = "Oligodendrocyte")
+
+opc_mn_genes <- opc_np_ep_degs$ALL %>% 
+  inner_join(linear_mn_fpr, by = c("gene" = "gene_name")) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>% 
+  filter(log_p > -log10(0.05), log_fpr > 1) %>% 
+  select(gene, log_fpr, log_p) %>% 
+  mutate(cell_type = "OPC")
+
+
+
+mn_genes <- list(ex_neu = ex_mn_genes,
+                 in_neu = in_mn_genes,
+                 ast = ast_mn_genes,
+                 olig = olig_mn_genes,
+                 micro = micro_mn_genes)
+
+up_right_genes <- bind_rows(ex_mn_genes,
+                            in_mn_genes,
+                            ast_mn_genes,
+                            olig_mn_genes,
+                            micro_mn_genes)
+
+up_right_genes %>% 
+  ggplot(aes(fct_reorder(gene, log_fpr), cell_type, fill = log_p)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 45))
+
+
+```
+

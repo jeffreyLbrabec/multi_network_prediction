@@ -1,0 +1,279 @@
+---
+title: "Updated CDF Figures"
+author: "Jeff Brabec"
+date: "3/7/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+library(readxl)
+library(ggrepel)
+library(safejoin)
+source(here("src/get_deg_aucs.R"))
+source(here("src/convert_to_names.R"))
+source(here("src/final_auc_processing.R"))
+source(here("src/gene_rank_plotr.R"))
+source(here("src/get_plot_cs.R"))
+source(here("src/make_pan_cell_sets.R"))
+source(here("src/get_fpr.R"))
+```
+
+
+## Read in Scores
+
+```{r}
+#Linear Results
+linear_astro_final_scores <- read_csv(here("results/final_scores/linear_astro_final_scores.csv"))
+linear_glia_final_scores <- read_csv(here("results/final_scores/linear_glia_final_scores.csv"))
+linear_neuron_final_scores <- read_csv(here("results/final_scores/linear_neuron_final_scores.csv"))
+linear_mn_final_scores <- read_csv(here("results/final_scores/linear_mn_final_scores.csv"))
+```
+
+## Calculate FPR and TPR for Genes
+```{r}
+linear_astro_fpr <- get_fpr(linear_astro_final_scores)
+linear_glia_fpr <- get_fpr(linear_glia_final_scores)
+linear_neuron_fpr <- get_fpr(linear_neuron_final_scores)
+linear_mn_fpr <- get_fpr(linear_mn_final_scores)
+```
+
+## No Path v. Early Path
+
+### Read in scRNAseq Data
+
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score.
+
+```{r}
+#Excitatory Neuron Data
+ex_neu_genes <- read_xlsx(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                          sheet = "Ex", 
+                          range = "L2:T16846")
+
+neuron_scores <- ex_neu_genes %>% 
+  janitor::clean_names() %>% 
+  rename(gene_name = x1) %>% 
+  left_join(linear_mn_fpr, by = "gene_name") %>% 
+  filter(!is.na(class)) %>% 
+  select(gene_name, log_fpr, mixed_model_p, ind_model_adj_pvals, ind_model_fc, mixed_model_z, de_gs_ind_model, de_gs_ind_mix_models)
+
+neuron_plots <- neuron_scores %>% 
+  mutate(mixed_model_p = replace_na(mixed_model_p, 1)) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>% 
+  rowwise() %>% 
+  mutate(comb_score = sum(log_fpr > .$log_fpr & log_p > .$log_p)) %>% 
+  ungroup() %>% 
+  mutate(comb_score = comb_score/n()) %>% 
+  arrange(desc(comb_score)) %>%
+  mutate(direction = if_else(mixed_model_z > 0, "Up", "Down")) %>% 
+  filter(!is.na(direction)) %>% 
+  ggplot(aes(x = log_p, y = log_fpr)) +
+  geom_point(aes(color = comb_score), size = 10) +
+  geom_label_repel(data = . %>% group_by(direction) %>% 
+                     slice_max(comb_score, n = 10, with_ties = FALSE), aes(label = gene_name), 
+                   hjust = -0.5,
+                   size = 8,
+                   nudge_x = 8.5,
+                   nudge_y = 2,
+                   force = 15) +
+  geom_vline(xintercept = -log10(0.05), linetype = "dashed") +
+  scale_color_viridis() +
+  labs(x = "-Log10 P-Value",
+       y = "Multi-Network Predicted Score",
+       color = "Combined Score") +
+  facet_wrap(~ direction,
+             nrow = 2) +
+  guides(color = guide_colorbar(barwidth = 15, barheight = 1.5)) +
+  theme_light() +
+  theme(axis.title = element_text(size = 25),
+        axis.text = element_text(size = 20),
+        strip.text = element_text(size = 25),
+        legend.title = element_text(size = 25),
+        legend.text = element_text(size = 20),
+        legend.position = "bottom")
+
+ggsave(here("results/figures/neuron_cdf.png"), 
+       neuron_plots,
+       height = 10,
+       width = 8,
+       dpi = 600)
+```
+
+```{r}
+#Inhibitory Neuron Data
+in_neu_genes <- read_xlsx(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                          sheet = "In", 
+                          range = "L2:T15262")
+
+in_neuron_scores <- in_neu_genes %>% 
+  janitor::clean_names() %>% 
+  rename(gene_name = x1) %>% 
+  left_join(linear_mn_fpr, by = "gene_name") %>% 
+  filter(!is.na(class)) %>% 
+  select(gene_name, log_fpr, mixed_model_p, ind_model_adj_pvals, ind_model_fc, mixed_model_z, de_gs_ind_model, de_gs_ind_mix_models)
+
+in_neuron_plots <- in_neuron_scores %>% 
+  mutate(mixed_model_p = replace_na(mixed_model_p, 1)) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>% 
+  rowwise() %>% 
+  mutate(comb_score = sum(log_fpr > .$log_fpr & log_p > .$log_p)) %>% 
+  ungroup() %>% 
+  mutate(comb_score = comb_score/n()) %>% 
+  arrange(desc(comb_score)) %>%
+  mutate(direction = if_else(mixed_model_z > 0, "Up", "Down")) %>% 
+  filter(!is.na(direction)) %>% 
+  ggplot(aes(x = log_p, y = log_fpr)) +
+  geom_point(aes(color = comb_score), size = 10) +
+  geom_label_repel(data = . %>% group_by(direction) %>% 
+                     slice_max(comb_score, n = 10, with_ties = FALSE), aes(label = gene_name), 
+                   hjust = -0.5,
+                   size = 8,
+                   nudge_x = 8.5,
+                   nudge_y = 2,
+                   force = 15) +
+  geom_vline(xintercept = -log10(0.05), linetype = "dashed") +
+  scale_color_viridis() +
+  labs(x = "-Log10 P-Value",
+       y = "Multi-Network Predicted Score",
+       color = "Combined Score") +
+  facet_wrap(~ direction,
+             ncol = 2) +
+  guides(color = guide_colorbar(barwidth = 15, barheight = 1.5)) +
+  theme_light() +
+  theme(axis.title = element_text(size = 25),
+        axis.text = element_text(size = 20),
+        strip.text = element_text(size = 25),
+        legend.title = element_text(size = 25),
+        legend.text = element_text(size = 20),
+        legend.position = "bottom")
+
+ggsave(here("results/figures/in_neuron_cdf.png"), 
+       in_neuron_plots,
+       height = 7,
+       width = 12,
+       dpi = 600)
+
+```
+
+```{r}
+#Astrocyte Data
+
+ast_genes <- read_xlsx(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                          sheet = "Ast", 
+                          range = "L2:T13228")
+
+ast_scores <- ast_genes %>% 
+  janitor::clean_names() %>% 
+  rename(gene_name = x1) %>% 
+  left_join(linear_mn_fpr, by = "gene_name") %>% 
+  filter(!is.na(class)) %>% 
+  mutate(mixed_model_p = as.numeric(mixed_model_p)) %>% 
+  select(gene_name, log_fpr, mixed_model_p, ind_model_adj_pvals, ind_model_fc, mixed_model_z, de_gs_ind_model, de_gs_ind_mix_models)
+
+ast_plots <- ast_scores %>% 
+  mutate(mixed_model_p = replace_na(mixed_model_p, 1)) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>% 
+  rowwise() %>% 
+  mutate(comb_score = sum(log_fpr > .$log_fpr & log_p > .$log_p)) %>% 
+  ungroup() %>% 
+  mutate(comb_score = comb_score/n()) %>% 
+  arrange(desc(comb_score)) %>%
+  mutate(direction = if_else(mixed_model_z > 0, "Up", "Down")) %>% 
+  filter(!is.na(direction)) %>% 
+  ggplot(aes(x = log_p, y = log_fpr)) +
+  geom_point(aes(color = comb_score), size = 10) +
+  geom_label_repel(data = . %>% group_by(direction) %>% 
+                     slice_max(comb_score, n = 10, with_ties = FALSE), aes(label = gene_name), 
+                   hjust = -0.5,
+                   size = 8,
+                   nudge_x = 8.5,
+                   nudge_y = 2,
+                   force = 15) +
+  geom_vline(xintercept = -log10(0.05), linetype = "dashed") +
+  scale_color_viridis() +
+  labs(x = "-Log10 P-Value",
+       y = "Multi-Network Predicted Score",
+       color = "Combined Score") +
+  facet_wrap(~ direction,
+             ncol = 2) +
+  guides(color = guide_colorbar(barwidth = 15, barheight = 1.5)) +
+  theme_light() +
+  theme(axis.title = element_text(size = 25),
+        axis.text = element_text(size = 20),
+        strip.text = element_text(size = 25),
+        legend.title = element_text(size = 25),
+        legend.text = element_text(size = 20),
+        legend.position = "bottom")
+
+ggsave(here("results/figures/ast_cdf.png"), 
+       ast_plots,
+       height = 7,
+       width = 12,
+       dpi = 600)
+```
+
+```{r}
+#Oligodendrocyte Data
+olig_genes <- read_xlsx(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                          sheet = "Oli", 
+                          range = "L2:T14358")
+
+olig_scores <- olig_genes %>% 
+  janitor::clean_names() %>% 
+  rename(gene_name = x1) %>% 
+  left_join(linear_mn_fpr, by = "gene_name") %>% 
+  filter(!is.na(class)) %>% 
+  mutate(mixed_model_p = as.numeric(mixed_model_p)) %>% 
+  select(gene_name, log_fpr, mixed_model_p, ind_model_adj_pvals, ind_model_fc, mixed_model_z, de_gs_ind_model, de_gs_ind_mix_models)
+
+olig_plots <- olig_scores %>% 
+  mutate(mixed_model_p = replace_na(mixed_model_p, 1)) %>% 
+  mutate(log_p = -log10(mixed_model_p)) %>% 
+  rowwise() %>% 
+  mutate(comb_score = sum(log_fpr > .$log_fpr & log_p > .$log_p)) %>% 
+  ungroup() %>% 
+  mutate(comb_score = comb_score/n()) %>% 
+  arrange(desc(comb_score)) %>%
+  mutate(direction = if_else(mixed_model_z > 0, "Up", "Down")) %>% 
+  filter(!is.na(direction)) %>% 
+  ggplot(aes(x = log_p, y = log_fpr)) +
+  geom_point(aes(color = comb_score), size = 10) +
+  geom_label_repel(data = . %>% group_by(direction) %>% 
+                     slice_max(comb_score, n = 10, with_ties = FALSE), aes(label = gene_name), 
+                   hjust = -0.5,
+                   size = 8,
+                   nudge_x = 8.5,
+                   nudge_y = 2,
+                   force = 15) +
+  geom_vline(xintercept = -log10(0.05), linetype = "dashed") +
+  scale_color_viridis() +
+  labs(x = "-Log10 P-Value",
+       y = "Multi-Network Predicted Score",
+       color = "Combined Score") +
+  facet_wrap(~ direction,
+             ncol = 2) +
+  guides(color = guide_colorbar(barwidth = 15, barheight = 1.5)) +
+  theme_light() +
+  theme(axis.title = element_text(size = 25),
+        axis.text = element_text(size = 20),
+        strip.text = element_text(size = 25),
+        legend.title = element_text(size = 25),
+        legend.text = element_text(size = 20),
+        legend.position = "bottom")
+
+ggsave(here("results/figures/olig_cdf.png"), 
+       olig_plots,
+       height = 7,
+       width = 12,
+       dpi = 600)
+```
+
+

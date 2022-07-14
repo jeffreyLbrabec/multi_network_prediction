@@ -1,0 +1,517 @@
+---
+title: "Merging DEG Sets and CDF plots"
+author: "Jeff Brabec"
+date: "10/18/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+library(readxl)
+library(ggrepel)
+library(safejoin)
+source(here("src/get_deg_aucs.R"))
+source(here("src/convert_to_names.R"))
+source(here("src/final_auc_processing.R"))
+source(here("src/gene_rank_plotr.R"))
+source(here("src/get_plot_cs.R"))
+source(here("src/make_pan_cell_sets.R"))
+source(here("src/get_fpr.R"))
+```
+
+## Read in Scores
+
+```{r}
+#Linear Results
+linear_astro_final_scores <- read_csv(here("results/final_scores/linear_astro_final_scores.csv"))
+linear_glia_final_scores <- read_csv(here("results/final_scores/linear_glia_final_scores.csv"))
+linear_neuron_final_scores <- read_csv(here("results/final_scores/linear_neuron_final_scores.csv"))
+linear_mn_final_scores <- read_csv(here("results/final_scores/linear_mn_final_scores.csv"))
+```
+
+## Calculate FPR and TPR for Genes
+```{r}
+linear_astro_fpr <- get_fpr(linear_astro_final_scores)
+linear_glia_fpr <- get_fpr(linear_glia_final_scores)
+linear_neuron_fpr <- get_fpr(linear_neuron_final_scores)
+linear_mn_fpr <- get_fpr(linear_mn_final_scores)
+```
+
+## No Path v. All Path
+
+### Read in scRNAseq Data
+In the markdown document `process_deg_data` we extracted the DEG for each cell type and merged together the gene lists of like cell types (neuron and glia) into pan-cell type gene lists. The abbreviations `np_ap` designate No-pathology v. Any Pathology. Both early and Late pathology groups are included in "any pathology".
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/ex_neu_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/in_neu_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/ast_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/micro_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/olig_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/opc_np_ap_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+### Making new pan-cell-type data with scores
+
+```{r}
+pan_neuron_np_ap_degs <- map2(ex_neu_np_ap_degs, in_neu_np_ap_degs, full_join, by = "gene") %>%
+  map(., pick_gene_score)
+
+pan_glia_np_ap_degs <- pmap(list(ast_np_ap_degs, 
+                                 micro_np_ap_degs, 
+                                 olig_np_ap_degs, 
+                                 opc_np_ap_degs), eat_wrapper) %>% 
+  map(., pick_gene_score)
+```
+
+## Plots
+
+### Joint CDF Ex. Neuron Plot
+
+Here i'll take a look at the multi-net prioritizations versus the various cell type p-vals or t-stats using the joint CDF.
+
+```{r}
+walk2(ex_neu_np_ap_degs,
+      names(ex_neu_np_ap_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Excitatory Neuron",
+      cell_type = "ex_neu",
+      comp_group = "no_path_v_all_path")
+```
+
+### Joint CDF In. Neuron Plot
+
+```{r}
+walk2(in_neu_np_ap_degs,
+      names(in_neu_np_ap_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Inhibitory Neuron",
+      cell_type = "in_neu",
+      comp_group = "no_path_v_all_path")
+```
+
+### Joint CDF Astrocyte Plot
+
+```{r}
+walk2(ast_np_ap_degs,
+      names(ast_np_ap_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Astrocyte",
+      cell_type = "ast",
+      comp_group = "no_path_v_all_path")
+```
+
+### Joint CDF Oligodendrocyte Plot
+
+```{r}
+walk2(olig_np_ap_degs,
+      names(olig_np_ap_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Oligodendrocyte",
+      cell_type = "olig",
+      comp_group = "no_path_v_all_path")
+```
+
+### Joint CDF OPC Plot
+
+```{r}
+walk2(opc_np_ap_degs,
+      names(opc_np_ap_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "OPC",
+      cell_type = "opc",
+      comp_group = "no_path_v_all_path")
+```
+
+### Joint CDF Pan-Neuronal Plot
+
+```{r}
+walk2(pan_neuron_np_ap_degs,
+      names(pan_neuron_np_ap_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Pan-Neuronal",
+      cell_type = "pan_neuron",
+      comp_group = "no_path_v_all_path")
+```
+
+### Joint CDF Pan-Glial Plot
+
+```{r}
+walk2(pan_glia_np_ap_degs,
+      names(pan_glia_np_ap_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Pan-Glial",
+      cell_type = "pan_glia",
+      comp_group = "no_path_v_all_path")
+```
+
+## No Path v. Early Path
+
+### Read in scRNAseq Data
+
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score.
+
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ex_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/in_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ast_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/micro_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/olig_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/opc_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+### Making new pan-cell-type data with scores
+
+```{r}
+pan_neuron_np_ep_degs <- map2(ex_neu_np_ep_degs, in_neu_np_ep_degs, full_join, by = "gene") %>%
+  map(., pick_gene_score)
+
+pan_glia_np_ep_degs <- pmap(list(ast_np_ep_degs, 
+                                 micro_np_ep_degs, 
+                                 olig_np_ep_degs, 
+                                 opc_np_ep_degs), eat_wrapper) %>% 
+  map(., pick_gene_score)
+```
+
+## Plots
+
+```{r}
+
+up_list <- list(ex_neu = ex_neu_np_ep_degs$UP %>% 
+                  select(gene, model_p) %>%
+                  mutate(cell_type = "Ex. Neuron",
+                         direction = "Up"),
+                in_neu = in_neu_np_ep_degs$UP %>%
+                  select(gene, model_p) %>% 
+                  mutate(cell_type = "In. Neuron",
+                         direction = "Up"),
+                ast = ast_np_ep_degs$UP %>% 
+                  select(gene, model_p) %>% 
+                  mutate(cell_type = "Astrocyte",
+                         direction = "Up"),
+                olig = olig_np_ep_degs$UP %>% 
+                  select(gene, model_p) %>% 
+                  mutate(cell_type = "Oligodendrocyte",
+                         direction = "Up"))
+down_list <- list(ex_neu = ex_neu_np_ep_degs$DOWN %>% 
+                    select(gene, model_p) %>%
+                    mutate(cell_type = "Ex. Neuron",
+                           direction = "Down"),
+                  in_neu = in_neu_np_ep_degs$DOWN %>%
+                    select(gene, model_p) %>% 
+                    mutate(cell_type = "In. Neuron",
+                           direction = "Down"),
+                  ast = ast_np_ep_degs$DOWN %>% 
+                    select(gene, model_p) %>% 
+                    mutate(cell_type = "Astrocyte",
+                           direction = "Down"),
+                  olig = olig_np_ep_degs$DOWN %>% 
+                    select(gene, model_p) %>% 
+                    mutate(cell_type = "Oligodendrocyte",
+                           direction = "Down"))
+
+up_scores <- map(up_list, get_comb_score, scores = linear_mn_fpr)
+down_scores <- map(down_list, get_comb_score, scores = linear_mn_fpr)
+
+up_merged <- reduce(up_scores, bind_rows)
+down_merged <- reduce(down_scores, bind_rows)
+
+all_merged <- bind_rows(up_merged, down_merged) %>% 
+  mutate(direction = fct_relevel(direction, "Up", "Down"))
+
+all_merged %>% 
+  ggplot(aes(x = log_p, y = log_fpr, label = gene)) +
+  geom_point(aes(color = comb_score), size = 10) +
+  geom_label_repel(data = . %>% group_by(cell_type, direction) %>% 
+                     slice_max(comb_score, n = 10, with_ties = FALSE), aes(label = gene), 
+                   hjust = -0.5,
+                   size = 8,
+                   nudge_x = 7,
+                   nudge_y = 2,
+                   force = 15) +
+  scale_color_viridis() +
+  labs(x = "-Log10 P-Value",
+       y = "Multi-Network Predicted Score",
+       color = "Combined Score") +
+  facet_wrap(~ cell_type + direction,
+             nrow = 4,
+             ncol = 2) +
+  theme_light() +
+  theme(axis.title = element_text(size = 20),
+        axis.text = element_text(size = 15),
+        strip.text = element_text(size = 20),
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 15))
+
+ggsave(here("results/figures/combined_cdfs.png"),
+       height = 25,
+       width = 25,
+       units = "in",
+       dpi = 600)
+
+top_10_comb_score <- score_tab %>% 
+  slice_max(comb_score, n = 10)
+
+score_tab_plot <-
+  ggplot(score_tab,
+         aes(x = log_p, y = log_fpr, label = gene)) +
+  geom_point(aes(color = comb_score), size = 5) +
+  scale_color_viridis() +
+  labs(x = "-Log10 P-Value",
+       y = "Multi-Network Predicted Score",
+       color = "Combined Score",
+       title = title,
+       subtitle = str_to_title(str_replace_all(comp_group, "_", " ")))
+
+score_tab_plot <- score_tab_plot + geom_text_repel(data = top_10_comb_score, aes(label = gene, fontface = "italic"))
+
+
+```
+
+
+### Joint CDF Ex. Neuron Plot
+
+Here i'll take a look at the multi-net prioritizations versus the various cell type p-vals or t-stats using the joint CDF.
+
+```{r}
+walk2(ex_neu_np_ep_degs,
+      names(ex_neu_np_ep_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Excitatory Neuron",
+      cell_type = "ex_neu",
+      comp_group = "no_path_v_early_path")
+```
+
+### Joint CDF In. Neuron Plot
+
+```{r}
+walk2(in_neu_np_ep_degs,
+      names(in_neu_np_ep_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Inhibitory Neuron",
+      cell_type = "in_neu",
+      comp_group = "no_path_v_early_path")
+```
+
+### Joint CDF Astrocyte Plot
+
+```{r}
+walk2(ast_np_ep_degs,
+      names(ast_np_ep_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Astrocyte",
+      cell_type = "ast",
+      comp_group = "no_path_v_early_path")
+```
+
+### Joint CDF Oligodendrocyte Plot
+
+```{r}
+walk2(olig_np_ep_degs,
+      names(olig_np_ep_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Oligodendrocyte",
+      cell_type = "olig",
+      comp_group = "no_path_v_early_path")
+```
+
+### Joint CDF OPC Plot
+
+```{r}
+walk2(opc_np_ep_degs,
+      names(opc_np_ep_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "OPC",
+      cell_type = "opc",
+      comp_group = "no_path_v_early_path")
+```
+
+### Joint CDF Pan-Neuronal Plot
+
+```{r}
+walk2(pan_neuron_np_ep_degs,
+      names(pan_neuron_np_ep_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Pan-Neuronal",
+      cell_type = "pan_neuron",
+      comp_group = "no_path_v_early_path")
+```
+
+### Joint CDF Pan-Glial Plot
+
+```{r}
+walk2(pan_glia_np_ep_degs,
+      names(pan_glia_np_ep_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Pan-Glial",
+      cell_type = "pan_glia",
+      comp_group = "no_path_v_early_path")
+```
+
+## Early Path v. Late Path
+
+### Read in scRNAseq Data
+In the markdown document `process_deg_data` we extracted the DEG for each cell type and merged together the gene lists of like cell types (neuron and glia) into pan-cell type gene lists. Where `ep_lp` denotes early versus late pathology comparison.
+```{r}
+#Excitatory Neuron Data
+ex_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ex_neu_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/in_neu_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ast_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/micro_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/olig_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/opc_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+### Making new pan-cell-type data with scores
+
+```{r}
+pan_neuron_ep_lp_degs <- map2(ex_neu_ep_lp_degs, in_neu_ep_lp_degs, full_join, by = "gene") %>%
+  map(., pick_gene_score)
+
+pan_glia_ep_lp_degs <- pmap(list(ast_ep_lp_degs, 
+                                 micro_ep_lp_degs, 
+                                 olig_ep_lp_degs, 
+                                 opc_ep_lp_degs), eat_wrapper) %>% 
+  map(., pick_gene_score)
+```
+
+## Plots
+
+### Joint CDF Ex. Neuron Plot
+
+Here i'll take a look at the multi-net prioritizations versus the various cell type p-vals or t-stats using the joint CDF.
+
+```{r}
+walk2(ex_neu_ep_lp_degs,
+      names(ex_neu_ep_lp_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Excitatory Neuron",
+      cell_type = "ex_neu",
+      comp_group = "early_path_v_late_path")
+```
+
+### Joint CDF In. Neuron Plot
+
+```{r}
+walk2(in_neu_ep_lp_degs,
+      names(in_neu_ep_lp_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Inhibitory Neuron",
+      cell_type = "in_neu",
+      comp_group = "early_path_v_late_path")
+```
+
+### Joint CDF Astrocyte Plot
+
+```{r}
+walk2(ast_ep_lp_degs,
+      names(ast_ep_lp_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Astrocyte",
+      cell_type = "ast",
+      comp_group = "early_path_v_late_path")
+```
+
+### Joint CDF Oligodendrocyte Plot
+
+```{r}
+walk2(olig_ep_lp_degs,
+      names(olig_ep_lp_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Oligodendrocyte",
+      cell_type = "olig",
+      comp_group = "early_path_v_late_path")
+```
+
+### Joint CDF OPC Plot
+
+```{r}
+walk2(opc_ep_lp_degs,
+      names(opc_ep_lp_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "OPC",
+      cell_type = "opc",
+      comp_group = "early_path_v_late_path")
+```
+
+### Joint CDF Pan-Neuronal Plot
+
+```{r}
+walk2(pan_neuron_ep_lp_degs,
+      names(pan_neuron_ep_lp_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Pan-Neuronal",
+      cell_type = "pan_neuron",
+      comp_group = "early_path_v_late_path")
+```
+
+### Joint CDF Pan-Glial Plot
+
+```{r}
+walk2(pan_glia_ep_lp_degs,
+      names(pan_glia_ep_lp_degs),
+      get_plot_cs,
+      scores = linear_mn_fpr,
+      title = "Pan-Glial",
+      cell_type = "pan_glia",
+      comp_group = "early_path_v_late_path")
+```

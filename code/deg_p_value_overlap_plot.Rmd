@@ -1,0 +1,201 @@
+---
+title: "Differential Expression Overlaps"
+author: "Jeff Brabec"
+date: "2/22/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+```
+
+
+# No Pathology v. Early Pathology
+
+## Read in scRNAseq Data
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. 
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ex_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/in_neu_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ast_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/micro_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/olig_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/opc_np_ep_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+# Early Pathology v. Late Pathology
+
+## Read in scRNAseq Data
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. Where `ep_lp` denotes early versus late pathology comparison.
+```{r}
+#Excitatory Neuron Data
+ex_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ex_neu_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Inhibitory Neuron Data
+in_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/in_neu_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Astrocyte Data
+ast_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ast_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Microglia Data
+micro_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/micro_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Data
+olig_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/olig_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+
+#Oligodendrocyte Precursor Cell Data
+opc_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/opc_ep_lp_degs.rds")) %>% map(., mutate, model_p = mixed_model_p)
+```
+
+```{r}
+ex_neu_z_comp_plot <- ex_neu_np_ep_degs$ALL %>%
+  select(gene, np_ep_p = model_p, np_ep_z = mixed_model_z) %>% 
+  full_join(ex_neu_ep_lp_degs$ALL, by = "gene") %>% 
+  select(gene, np_ep_p, ep_lp_p = model_p, ep_lp_z = mixed_model_z, np_ep_z) %>% 
+  mutate(np_ep_p = replace_na(np_ep_p, 0),
+         ep_lp_p = replace_na(ep_lp_p, 0),
+         log_np_ep_p = -log10(np_ep_p),
+         log_ep_lp_p = -log10(ep_lp_p),
+         log_np_ep_p = replace(log_np_ep_p, is.infinite(log_np_ep_p), 0),
+         log_ep_lp_p = replace(log_ep_lp_p, is.infinite(log_ep_lp_p), 0),
+         np_ep_z = replace_na(np_ep_z, 0),
+         ep_lp_z = replace_na(ep_lp_z, 0)) %>% 
+  # mutate(expr_shift = case_when(np_ep_z > 0 & ep_lp_z < 0 ~ "Up to Down",
+  #                               np_ep_z < 0 & ep_lp_z > 0 ~ "Down to Up",
+  #                               np_ep_z > 0 & ep_lp_z > 0 ~ "Up to Up",
+  #                               np_ep_z < 0 & ep_lp_z < 0 ~ "Down to Down"),
+  #        expr_shift = replace_na(expr_shift, "Other")) %>% 
+  # mutate(expr_shift = fct_relevel(expr_shift, "Down to Up", "Up to Down", "Other")) %>% 
+  ggplot(aes(x = np_ep_z, y = ep_lp_z)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(linetype = "dashed") +
+  scale_color_viridis_d() +
+  labs(x = "Z-value No Path v. Early Path",
+       y = "Z-value Early Path v. Late Path") +
+  theme_light()
+
+ggsave(here("results/figures/ex_neu_z_comp_plot.png"),
+       ex_neu_z_comp_plot,
+       height = 5,
+       width = 5,
+       units = "in",
+       dpi = 600)
+```
+
+```{r}
+in_neu_z_comp_plot <- in_neu_np_ep_degs$ALL %>%
+  select(gene, np_ep_p = model_p, np_ep_z = mixed_model_z) %>% 
+  full_join(in_neu_ep_lp_degs$ALL, by = "gene") %>% 
+  select(gene, np_ep_p, ep_lp_p = model_p, ep_lp_z = mixed_model_z, np_ep_z) %>% 
+  mutate(np_ep_p = replace_na(np_ep_p, 0),
+         ep_lp_p = replace_na(ep_lp_p, 0),
+         log_np_ep_p = -log10(np_ep_p),
+         log_ep_lp_p = -log10(ep_lp_p),
+         log_np_ep_p = replace(log_np_ep_p, is.infinite(log_np_ep_p), 0),
+         log_ep_lp_p = replace(log_ep_lp_p, is.infinite(log_ep_lp_p), 0),
+         np_ep_z = replace_na(np_ep_z, 0),
+         ep_lp_z = replace_na(ep_lp_z, 0)) %>% 
+  # mutate(expr_shift = case_when(np_ep_z > 0 & ep_lp_z < 0 ~ "Up to Down",
+  #                               np_ep_z < 0 & ep_lp_z > 0 ~ "Down to Up",
+  #                               np_ep_z > 0 & ep_lp_z > 0 ~ "Up to Up",
+  #                               np_ep_z < 0 & ep_lp_z < 0 ~ "Down to Down"),
+  #        expr_shift = replace_na(expr_shift, "Other")) %>% 
+  # mutate(expr_shift = fct_relevel(expr_shift, "Down to Up", "Up to Down", "Other")) %>% 
+  ggplot(aes(x = np_ep_z, y = ep_lp_z)) +
+  geom_point(alpha = 0.5) +
+  scale_color_viridis_d() +
+  labs(x = "Z-value No Path v. Early Path",
+       y = "Z-value Early Path v. Late Path") +
+  theme_light()
+
+ggsave(here("results/figures/in_neu_z_comp_plot.png"),
+       in_neu_z_comp_plot,
+       height = 5,
+       width = 5,
+       units = "in",
+       dpi = 600)
+```
+
+```{r}
+ast_z_comp_plot <- ast_np_ep_degs$ALL %>%
+  select(gene, np_ep_p = model_p, np_ep_z = mixed_model_z) %>% 
+  full_join(ast_ep_lp_degs$ALL, by = "gene") %>% 
+  select(gene, np_ep_p, ep_lp_p = model_p, ep_lp_z = mixed_model_z, np_ep_z) %>% 
+  mutate(np_ep_p = replace_na(np_ep_p, 0),
+         ep_lp_p = replace_na(ep_lp_p, 0),
+         log_np_ep_p = -log10(np_ep_p),
+         log_ep_lp_p = -log10(ep_lp_p),
+         log_np_ep_p = replace(log_np_ep_p, is.infinite(log_np_ep_p), 0),
+         log_ep_lp_p = replace(log_ep_lp_p, is.infinite(log_ep_lp_p), 0),
+         np_ep_z = replace_na(np_ep_z, 0),
+         ep_lp_z = replace_na(ep_lp_z, 0)) %>% 
+  # mutate(expr_shift = case_when(np_ep_z > 0 & ep_lp_z < 0 ~ "Up to Down",
+  #                               np_ep_z < 0 & ep_lp_z > 0 ~ "Down to Up",
+  #                               np_ep_z > 0 & ep_lp_z > 0 ~ "Up to Up",
+  #                               np_ep_z < 0 & ep_lp_z < 0 ~ "Down to Down"),
+  #        expr_shift = replace_na(expr_shift, "Other")) %>% 
+  # mutate(expr_shift = fct_relevel(expr_shift, "Down to Up", "Up to Down", "Other")) %>% 
+  ggplot(aes(x = np_ep_z, y = ep_lp_z)) +
+  geom_point(alpha = 0.5) +
+  scale_color_viridis_d() +
+  labs(x = "Z-value No Path v. Early Path",
+       y = "Z-value Early Path v. Late Path") +
+  theme_light()
+
+ggsave(here("results/figures/ast_z_comp_plot.png"),
+       ast_z_comp_plot,
+       height = 5,
+       width = 5,
+       units = "in",
+       dpi = 600)
+```
+
+```{r}
+olig_z_comp_plot <- olig_np_ep_degs$ALL %>%
+  select(gene, np_ep_p = model_p, np_ep_z = mixed_model_z) %>% 
+  full_join(olig_ep_lp_degs$ALL, by = "gene") %>% 
+  select(gene, np_ep_p, ep_lp_p = model_p, ep_lp_z = mixed_model_z, np_ep_z) %>% 
+  mutate(np_ep_p = replace_na(np_ep_p, 0),
+         ep_lp_p = replace_na(ep_lp_p, 0),
+         log_np_ep_p = -log10(np_ep_p),
+         log_ep_lp_p = -log10(ep_lp_p),
+         log_np_ep_p = replace(log_np_ep_p, is.infinite(log_np_ep_p), 0),
+         log_ep_lp_p = replace(log_ep_lp_p, is.infinite(log_ep_lp_p), 0),
+         np_ep_z = replace_na(np_ep_z, 0),
+         ep_lp_z = replace_na(ep_lp_z, 0)) %>% 
+  # mutate(expr_shift = case_when(np_ep_z > 0 & ep_lp_z < 0 ~ "Up to Down",
+  #                               np_ep_z < 0 & ep_lp_z > 0 ~ "Down to Up",
+  #                               np_ep_z > 0 & ep_lp_z > 0 ~ "Up to Up",
+  #                               np_ep_z < 0 & ep_lp_z < 0 ~ "Down to Down"),
+  #        expr_shift = replace_na(expr_shift, "Other")) %>% 
+  # mutate(expr_shift = fct_relevel(expr_shift, "Down to Up", "Up to Down", "Up to Up", "Other")) %>% 
+  ggplot(aes(x = np_ep_z, y = ep_lp_z)) +
+  geom_point(alpha = 0.5) +
+  scale_color_viridis_d() +
+  labs(x = "Log P-value No Path v. Early Path",
+       y = "Log P-value Early Path v. Late Path") +
+  theme_light()
+
+ggsave(here("results/figures/olig_z_comp_plot.png"),
+       olig_z_comp_plot,
+       height = 5,
+       width = 5,
+       units = "in",
+       dpi = 600)
+
+```
+

@@ -1,0 +1,85 @@
+library(tidyverse)
+library(tidymodels)
+library(here)
+library(janitor)
+library(gprofiler2)
+library(magrittr)
+library(igraph)
+library(ranger)
+library(kernlab)
+library(baguette)
+library(furrr)
+library(R.utils)
+library(parallel)
+library(doParallel)
+library(safejoin)
+library(cluster)
+library(fpc)
+
+#Source in Functions
+fun_dir <- list.files(here("src"), full.names = TRUE)
+
+for(i in 1:length(fun_dir)) {
+  
+  source(fun_dir[i])
+  
+}
+
+
+# Read in Data ------------------------------------------------------------
+
+astro_kmeds_tibble <- read_csv(here("data/astro_kmeds_tibble.csv"))
+
+
+
+# Get Folds ---------------------------------------------------------------
+set.seed(46)
+astro_cv_folds <- nested_cv(astro_kmeds_tibble,
+                                outside = vfold_cv(v = 10, strata = class),
+                                inside = bootstraps(times = 25, strata = class))
+
+astro_trial_results <- read_rds(here("results/astro_linear_results/astro_trial_linear_results.rds"))
+
+# Aggregate Model Performance Across Hyper-Parameters ---------------------
+
+astro_fold_res <- map(astro_trial_results, format_folds, learner = "svm_linear")
+
+astro_score_res <- map(astro_fold_res, median_wrapper)
+
+best_hypers <- function(dat) dat[which.max(dat$auc),]
+
+best_astro_hyper_df <- map_dfr(astro_score_res, best_hypers) %>%
+  mutate(fold_id = astro_cv_folds$id)
+
+
+# Read in Best Models -----------------------------------------------------
+
+param_list <- list(cost = best_astro_hyper_df$cost,
+                   fold_id = best_astro_hyper_df$fold_id)
+
+best_astro_models <- best_astro_hyper_df %>%
+  mutate(models =  future_pmap(param_list,
+                               pick_model,
+                               learner = "svm_linear",
+                               results_dir = here("results/astro_linear_results"))) %>%
+  mutate(splits = astro_cv_folds$splits)
+
+
+# Calculate final AUCs ----------------------------------------------------
+
+dir.create(file.path(here("results"), paste("astro", "linear", "final", "predictions", sep = "_")))
+
+best_astro_mod_list <- list(splits = best_astro_models$splits,
+                                models = best_astro_models$models,
+                                fold_id = best_astro_models$fold_id)
+
+final_res_dir <- here("results/astro_linear_final_predictions")
+
+final_astro_auc <- best_astro_models %>%
+  mutate(assessment_auc = pmap_dbl(best_astro_mod_list,
+                                   bag_wrapper,
+                                   res_dir = final_res_dir,
+                                   tissue = "astro")) %>%
+  select(cost, fold_id, auc, assessment_auc)
+
+write_rds(final_astro_auc, here("results/astro_linear_final_predictions/final_astro_linear_auc.rds"))

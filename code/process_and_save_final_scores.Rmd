@@ -1,0 +1,227 @@
+---
+title: "Process and Save Final Scores"
+author: "Jeff Brabec"
+date: "10/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+source(here("src/get_deg_aucs.R"))
+source(here("src/convert_to_names.R"))
+source(here("src/final_auc_processing.R"))
+```
+
+# Classical Approach Results
+
+## Neuron Scores
+```{r}
+neuron_full_final_scores <- get_final_scores(here("code/classical_fair_shake/neuron_full_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+neuron_full_gene_names <- convert_to_names(neuron_full_final_scores$genes, 
+                                           species = "hsapiens", 
+                                           target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+neuron_full_final_score_names <- neuron_full_final_scores %>% 
+  inner_join(neuron_full_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(neuron_full_final_score_names, here("results/final_scores/linear_neuron_full_final_scores.csv"))
+```
+
+## Astrocyte Scores
+```{r}
+astro_full_final_scores <- get_final_scores(here("code/classical_fair_shake/astro_full_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+astro_full_gene_names <- convert_to_names(astro_full_final_scores$genes, 
+                                           species = "hsapiens", 
+                                           target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+astro_full_final_score_names <- astro_full_final_scores %>% 
+  inner_join(astro_full_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(astro_full_final_score_names, here("results/final_scores/linear_astro_full_final_scores.csv"))
+```
+
+## Glia Scores
+```{r}
+glia_full_final_scores <- get_final_scores(here("code/classical_fair_shake/glia_full_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+glia_full_gene_names <- convert_to_names(glia_full_final_scores$genes, 
+                                           species = "hsapiens", 
+                                           target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+glia_full_final_score_names <- glia_full_final_scores %>% 
+  inner_join(glia_full_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(glia_full_final_score_names, here("results/final_scores/linear_glia_full_final_scores.csv"))
+```
+
+# Linear Model Results
+
+## Astrocyte scores
+```{r}
+astro_final_scores <- get_final_scores(here("results/astro_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+astro_gene_names <- convert_to_names(astro_final_scores$genes, 
+                                     species = "hsapiens", 
+                                     target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+astro_final_score_names <- astro_final_scores %>% 
+  inner_join(astro_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(astro_final_score_names, here("results/final_scores/linear_astro_final_scores.csv"))
+```
+
+## Neuron Scores
+```{r}
+neuron_final_scores <- get_final_scores(here("results/neuron_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+neuron_gene_names <- convert_to_names(neuron_final_scores$genes, 
+                                      species = "hsapiens", 
+                                      target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+neuron_final_score_names <- neuron_final_scores %>% 
+  inner_join(neuron_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(neuron_final_score_names, here("results/final_scores/linear_neuron_final_scores.csv"))
+```
+
+## Glia Scores
+```{r}
+glia_final_scores <- get_final_scores(here("results/glia_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+glia_gene_names <- convert_to_names(glia_final_scores$genes, 
+                                    species = "hsapiens", 
+                                    target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+glia_final_score_names <- glia_final_scores %>% 
+  inner_join(glia_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(glia_final_score_names, here("results/final_scores/linear_glia_final_scores.csv"))
+```
+
+## Multi-Network Scores
+```{r}
+multi_net_linear_final_scores <- get_final_scores(here("results/multi_net_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+multi_net_linear_gene_names <- convert_to_names(multi_net_linear_final_scores$genes, 
+                                                species = "hsapiens", 
+                                                target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+multi_net_linear_final_score_names <- multi_net_linear_final_scores %>% 
+  inner_join(multi_net_linear_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(multi_net_linear_final_score_names, here("results/final_scores/linear_mn_final_scores.csv"))
+
+```
+
+# RBF Model Results
+
+## Astrocyte Scores
+```{r}
+astro_rbf_final_scores <- get_final_scores(here("results/astro_rbf_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+astro_rbf_gene_names <- convert_to_names(astro_rbf_final_scores$genes, 
+                                         species = "hsapiens", 
+                                         target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+astro_rbf_final_score_names <- astro_rbf_final_scores %>% 
+  inner_join(astro_rbf_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(astro_rbf_final_score_names, here("results/final_scores/rbf_astro_final_scores.csv"))
+```
+
+## Neuron Scores
+```{r}
+neuron_rbf_final_scores <- get_final_scores(here("results/neuron_rbf_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+neuron_rbf_gene_names <- convert_to_names(neuron_rbf_final_scores$genes, 
+                                          species = "hsapiens", 
+                                          target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+neuron_rbf_final_score_names <- neuron_rbf_final_scores %>% 
+  inner_join(neuron_rbf_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(neuron_rbf_final_score_names, here("results/final_scores/rbf_neuron_final_scores.csv"))
+
+```
+
+## Glia Scores
+```{r}
+glia_rbf_final_scores <- get_final_scores(here("results/glia_rbf_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+glia_rbf_gene_names <- convert_to_names(glia_rbf_final_scores$genes, 
+                                        species = "hsapiens", 
+                                        target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+glia_rbf_final_score_names <- glia_rbf_final_scores %>% 
+  inner_join(glia_rbf_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(glia_rbf_final_score_names, here("results/final_scores/rbf_glia_final_scores.csv"))
+```
+
+## Multi-Network Scores
+```{r}
+multi_net_rbf_final_scores <- get_final_scores(here("results/multi_net_rbf_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+multi_net_rbf_gene_names <- convert_to_names(multi_net_rbf_final_scores$genes, 
+                                             species = "hsapiens", 
+                                             target = "ENTREZGENE") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input)) %>% 
+  filter(name != "nan")
+
+multi_net_rbf_final_score_names <- multi_net_rbf_final_scores %>% 
+  inner_join(multi_net_rbf_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+write_csv(multi_net_rbf_final_score_names, here("results/final_scores/rbf_mn_final_scores.csv"))
+```
+

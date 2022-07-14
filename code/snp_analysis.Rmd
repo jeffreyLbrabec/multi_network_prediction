@@ -1,0 +1,716 @@
+---
+title: "SNP Window Analysis"
+author: "Jeff Brabec"
+date: "4/25/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(here)
+library(biomaRt)
+library(gprofiler2)
+library(gt)
+library(viridisLite)
+
+
+source(here("src/get_fpr.R"))
+```
+
+# Reading in new GWAS data using datapasta
+```{r}
+new_snps <- read_csv(here("data/new_loci.csv")) %>% 
+  filter(!duplicated(gene))
+
+```
+
+
+# Read in data
+```{r}
+#Linear Results
+linear_astro_final_scores <- read_csv(here("results/final_scores/linear_astro_final_scores.csv"))
+linear_glia_final_scores <- read_csv(here("results/final_scores/linear_glia_final_scores.csv"))
+linear_neuron_final_scores <- read_csv(here("results/final_scores/linear_neuron_final_scores.csv"))
+linear_mn_final_scores <- read_csv(here("results/final_scores/linear_mn_final_scores.csv"))
+
+linear_neuron_full_final_scores <- read_csv(here("results/final_scores/linear_neuron_full_final_scores.csv"))
+linear_astro_full_final_scores <- read_csv(here("results/final_scores/linear_astro_full_final_scores.csv"))
+linear_glia_full_final_scores <- read_csv(here("results/final_scores/linear_glia_full_final_scores.csv"))
+## Calculate FPR and TPR for Genes
+linear_astro_fpr <- get_fpr(linear_astro_final_scores)
+linear_glia_fpr <- get_fpr(linear_glia_final_scores)
+linear_neuron_fpr <- get_fpr(linear_neuron_final_scores)
+linear_mn_fpr <- get_fpr(linear_mn_final_scores)
+
+linear_neuron_full_fpr <- get_fpr(linear_neuron_full_final_scores)
+linear_astro_full_fpr <- get_fpr(linear_astro_full_final_scores)
+linear_glia_full_fpr <- get_fpr(linear_glia_full_final_scores)
+```
+
+# New SNPs
+```{r}
+snp_mart <- useMart("ENSEMBL_MART_SNP", dataset="hsapiens_snp")
+
+snp_ids <- new_snps$rsid
+snp_attributes <- c("refsnp_id", "chr_name", "chrom_start", "ensembl_gene_name", "ensembl_gene_stable_id")
+
+snp_locations <- getBM(attributes = snp_attributes, 
+                       filters = "snp_filter", 
+                       values = snp_ids, 
+                       mart = snp_mart) %>% 
+  filter(!str_detect(chr_name, "CHR")) %>% 
+  left_join(new_snps, by = c("refsnp_id" = "rsid"))
+
+
+```
+
+# Function to get genes within a 2MB window around a snp.
+```{r}
+get_functional_window <- function(snp_id, snp_loc, gene_name, chr_name, mart, attr, filters, func_scores) {
+  
+  gene_window <- getBM(attributes = attr,
+                       filters = filters,
+                       values = list(chromosome_name = chr_name, start = snp_loc - 1000000, end = snp_loc + 1000000),
+                       mart = mart) %>% 
+    filter(hgnc_symbol != "")
+  
+  gene_window_fprs <- gene_window %>% 
+    left_join(func_scores, by = c("hgnc_symbol" = "gene_name")) %>% 
+    drop_na()
+  
+  # gene_window_fprs %>%
+  #   ggplot(aes(start_position, log_fpr)) +
+  #   geom_point(size = 5) +
+  #   geom_point(data = filter(gene_window_fprs, log_fpr < 1), color = "grey", size = 5) +
+  #   geom_point(data = filter(gene_window_fprs, hgnc_symbol == gene_name), color = "purple", size = 5) +
+  #   geom_point(data = slice_max(gene_window_fprs, log_fpr), color = "slateblue", size = 5) +
+  #   geom_point(data = filter(gene_window_fprs, hgnc_symbol == gene_name & log_fpr == max(log_fpr)), color = "red", size = 5) +
+  #   geom_text(data = filter(gene_window_fprs, hgnc_symbol == gene_name), aes(label = hgnc_symbol)) +
+  #   geom_text(data = filter(gene_window_fprs, log_fpr > 2), aes(label = hgnc_symbol)) +
+  #   geom_text(data = slice_max(gene_window_fprs, log_fpr), aes(label = hgnc_symbol)) +
+  #   geom_hline(yintercept = 1, linetype = "dashed", color = "sienna") +
+  #   labs(title = snp_id,
+  #        x = "Genomic Start Position",
+  #        y = "Functional Score") +
+  #   theme_light()
+  # 
+  # ggsave(here(paste0("results/positional_plots/", snp_id, ".png")))
+}
+```
+
+```{r}
+#Making *_info lists for pmap to work. Essentially a for loop for three columns of data.
+snp_info <- list(snp_id = snp_locations$refsnp_id,
+                 snp_loc = snp_locations$chrom_start,
+                 gene_name = snp_locations$gene,
+                 chr_name = snp_locations$chr_name)
+pwalk(snp_info,
+      get_functional_window,
+      mart = gene_mart, 
+      attr = gene_attributes, 
+      filters = gene_filters, 
+      func_scores = linear_mn_fpr)
+
+new_snp_windows <- pmap(snp_info,
+                        get_functional_window,
+                        mart = gene_mart, 
+                        attr = gene_attributes, 
+                        filters = gene_filters, 
+                        func_scores = linear_mn_fpr) 
+names(new_snp_windows) <- snp_locations$refsnp_id
+
+new_snp_windows_neuron <- pmap(snp_info,
+                               get_functional_window,
+                               mart = gene_mart,
+                               attr = gene_attributes,
+                               filters = gene_filters,
+                               func_scores = linear_neuron_fpr)
+names(new_snp_windows_neuron) <- snp_locations$refsnp_id
+
+new_snp_windows_glia <- pmap(snp_info,
+                             get_functional_window,
+                             mart = gene_mart,
+                             attr = gene_attributes,
+                             filters = gene_filters,
+                             func_scores = linear_glia_fpr)
+names(new_snp_windows_glia) <- snp_locations$refsnp_id
+
+new_snp_windows_astro <- pmap(snp_info,
+                              get_functional_window,
+                              mart = gene_mart,
+                              attr = gene_attributes,
+                              filters = gene_filters,
+                              func_scores = linear_astro_fpr)
+names(new_snp_windows_astro) <- snp_locations$refsnp_id
+
+new_snp_windows_neuron_full <- pmap(snp_info,
+                                    get_functional_window,
+                                    mart = gene_mart,
+                                    attr = gene_attributes,
+                                    filters = gene_filters,
+                                    func_scores = linear_neuron_full_fpr)
+names(new_snp_windows_neuron_full) <- snp_locations$refsnp_id
+
+new_snp_windows_astro_full <- pmap(snp_info,
+                                    get_functional_window,
+                                    mart = gene_mart,
+                                    attr = gene_attributes,
+                                    filters = gene_filters,
+                                    func_scores = linear_astro_full_fpr)
+names(new_snp_windows_astro_full) <- snp_locations$refsnp_id
+
+new_snp_windows_glia_full <- pmap(snp_info,
+                                    get_functional_window,
+                                    mart = gene_mart,
+                                    attr = gene_attributes,
+                                    filters = gene_filters,
+                                    func_scores = linear_glia_full_fpr)
+names(new_snp_windows_glia_full) <- snp_locations$refsnp_id
+
+
+write_rds(new_snp_windows, here("data/snp_window_genes.rds"))
+
+
+pos_attrs <- c("hgnc_symbol", "start_position", "end_position")
+pos_filters <- c("external_gene_name")
+
+getBM(attributes = pos_attrs,
+      filters = pos_filters,
+      values = new_snp_windows[[1]]$hgnc_symbol,
+      mart = gene_mart)
+
+```
+
+
+### Early test code
+```{r}
+gene_mart <- useMart("ENSEMBL_MART_ENSEMBL", dataset = "hsapiens_gene_ensembl")
+
+gene_attributes <- c("hgnc_symbol", "start_position", "chromosome_name")
+
+gene_filters <- c("chromosome_name","start", "end")
+
+gene_window <- getBM(attributes = gene_attributes,
+                     filters = gene_filters,
+                     values = list(start = 43352879, end = 45352879),
+                     mart = gene_mart) %>% 
+  filter(hgnc_symbol != "")
+```
+
+```{r}
+gene_window_fprs <- gene_window %>% 
+  left_join(linear_mn_fpr, by = c("hgnc_symbol" = "gene_name")) %>% 
+  drop_na()
+
+gene_window_fprs %>% 
+  ggplot(aes(start_position, log_fpr)) +
+  geom_point() +
+  geom_point(data = filter(gene_window_fprs, log_fpr < 1), color = "grey") +
+  geom_text(data = filter(gene_window_fprs, log_fpr > 2), aes(label = hgnc_symbol)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "sienna") +
+  theme_light()
+```
+
+
+
+```{r}
+new_snp_windows %>% 
+  map(pull, hgnc_symbol) %>% 
+  write_rds(here("data/new_snp_window_genes.rds"))
+
+gene_tib <- tibble(rsid = names(new_snp_windows),
+                   interval = paste0(snp_info$chr_name, ":", if_else(snp_info$snp_loc - 1000000 < 0, 0, snp_info$snp_loc - 1000000), "-", snp_info$snp_loc + 1000000),
+                   bellenguez_gene = snp_info$gene_name,
+                   our_max_gene = map_chr(new_snp_windows, get_our_max_gene),
+                   our_max_score = map_dbl(new_snp_windows, get_our_max_score),
+                   our_genes_over_one = map_chr(new_snp_windows, get_our_sig_genes)) %>% 
+  arrange(rsid) %>% 
+  mutate(tier = snp_locations$tier)
+
+huh <- gene_tib %>% 
+  mutate(their_score = map2_dbl(bellenguez_gene, new_snp_windows, get_their_score)) %>% 
+  dplyr::select(rsid, interval, our_max_gene, bellenguez_gene, our_max_score, their_score, everything()) %>% 
+  rowwise() %>% 
+  mutate(to_order = case_when(bellenguez_gene %in% unlist(str_split(our_max_gene, pattern = ", ")) ~ "Top Gene Match",
+                              TRUE ~ "Other")) %>% 
+  ungroup() %>% 
+  arrange(to_order, desc(our_max_score)) %>% 
+  gt(groupname_col = "to_order") %>% 
+  tab_header(
+    title = "Comparison of Functional Top Ranked Genes to Bellenguez et al. Method | Multi-Network NGR"
+  ) %>% 
+  tab_style(
+    style = list(
+      cell_fill(color = "darkseagreen1")
+    ),
+    locations = cells_body(
+      columns = c(bellenguez_gene, our_max_gene), # not needed if coloring all columns
+      rows = bellenguez_gene == our_max_gene)
+  ) %>% 
+  fmt_number(
+    columns = c(our_max_score, their_score),
+    decimals = 2
+  ) %>% 
+  data_color(
+    columns = c(our_max_score, their_score),
+    colors = scales::col_numeric(
+      palette = viridis(n = 8),
+      domain = c(0, 4)
+    )
+  ) %>% 
+  row_group_order(groups = c("Top Gene Match", "Other")) %>% 
+  cols_align(
+    align = "center",
+    columns = rsid:their_score
+  ) %>% 
+  cols_width(
+    interval ~ px(250),
+    our_genes_over_one ~ px(250)
+  ) %>% 
+  cols_label(
+    rsid = md("**RSID**"),
+    interval = md("**Interval**"),
+    our_max_gene = md("**Our Top Gene**"),
+    bellenguez_gene = md("**Bellenguez et al. Top Gene**"),
+    our_max_score = md("**Score for Our Top Gene**"),
+    their_score = md("**Score for Bellenguez Top Gene**"),
+    our_genes_over_one = md("**Genes with Score Greater than One**"),
+    tier = md("**Bellenguez Tier**")
+  )
+
+gtsave(huh, here("results/mnngr_gt.png"))
+
+get_our_sig_genes <- function(data) {
+  
+  if(sum(data$log_fpr > 1) > 0) {
+    data %>% 
+      filter(log_fpr > 1) %>% 
+      pull(hgnc_symbol) %>% 
+      paste(collapse = ", ")
+  }else {
+    "-"
+  }
+}
+
+get_our_max_gene <- function(data) {
+  
+  data %>% 
+    slice_max(log_fpr, n = 1) %>% 
+    pull(hgnc_symbol) %>% 
+    paste(collapse = ", ")
+  
+}
+
+get_our_max_score <- function(data) {
+  
+  data %>% 
+    slice_max(log_fpr) %>% 
+    pull(log_fpr)
+  
+}
+
+get_their_score <- function(gene, data) {
+  
+  if(sum(gene %in% data$hgnc_symbol) != 0) {
+    
+    filter(data, hgnc_symbol == gene) %>% 
+      pull(log_fpr)
+    
+  }else{
+    0
+  }
+  
+}
+
+
+```
+
+## Neuron
+```{r}
+gene_tib_neuron <- tibble(rsid = names(new_snp_windows_neuron),
+                          interval = paste0(snp_info$chr_name, ":", if_else(snp_info$snp_loc - 1000000 < 0, 0, snp_info$snp_loc - 1000000), "-", snp_info$snp_loc + 1000000),
+                          bellenguez_gene = snp_info$gene_name,
+                          our_max_gene = map_chr(new_snp_windows_neuron, get_our_max_gene),
+                          our_max_score = map_dbl(new_snp_windows_neuron, get_our_max_score),
+                          our_genes_over_one = map_chr(new_snp_windows_neuron, get_our_sig_genes)) %>% 
+  arrange(rsid) %>% 
+  mutate(tier = snp_locations$tier)
+
+huh_neuron <- gene_tib_neuron %>% 
+  mutate(their_score = map2_dbl(bellenguez_gene, new_snp_windows_neuron, get_their_score)) %>% 
+  dplyr::select(rsid, interval, our_max_gene, bellenguez_gene, our_max_score, their_score, everything()) %>% 
+  rowwise() %>% 
+  mutate(to_order = case_when(bellenguez_gene %in% unlist(str_split(our_max_gene, pattern = ", ")) ~ "Top Gene Match",
+                              TRUE ~ "Other")) %>% 
+  ungroup() %>% 
+  arrange(to_order, desc(our_max_score)) %>% 
+  gt(groupname_col = "to_order") %>% 
+  tab_header(
+    title = "Comparison of Functional Top Ranked Genes to Bellenguez et al. Method | Neuron NGR"
+  ) %>% 
+  tab_style(
+    style = list(
+      cell_fill(color = "darkseagreen1")
+    ),
+    locations = cells_body(
+      columns = c(bellenguez_gene, our_max_gene), # not needed if coloring all columns
+      rows = bellenguez_gene == our_max_gene)
+  ) %>% 
+  fmt_number(
+    columns = c(our_max_score, their_score),
+    decimals = 2
+  ) %>% 
+  data_color(
+    columns = c(our_max_score, their_score),
+    colors = scales::col_numeric(
+      palette = viridis(n = 8),
+      domain = c(0, 4)
+    )
+  ) %>% 
+  row_group_order(groups = c("Top Gene Match", "Other")) %>% 
+  cols_align(
+    align = "center",
+    columns = rsid:their_score
+  ) %>% 
+  cols_width(
+    interval ~ px(250),
+    our_genes_over_one ~ px(250)
+  ) %>% 
+  cols_label(
+    rsid = md("**RSID**"),
+    interval = md("**Interval**"),
+    our_max_gene = md("**Our Top Gene**"),
+    bellenguez_gene = md("**Bellenguez et al. Top Gene**"),
+    our_max_score = md("**Score for Our Top Gene**"),
+    their_score = md("**Score for Bellenguez Top Gene**"),
+    our_genes_over_one = md("**Genes with Score Greater than One**"),
+    tier = md("**Bellenguez Tier**")
+  )
+
+gtsave(huh_neuron, here("results/neuron_gt.png"))
+```
+
+## Glia
+```{r}
+gene_tib_glia <- tibble(rsid = names(new_snp_windows_glia),
+                        interval = paste0(snp_info$chr_name, ":", if_else(snp_info$snp_loc - 1000000 < 0, 0, snp_info$snp_loc - 1000000), "-", snp_info$snp_loc + 1000000),
+                        bellenguez_gene = snp_info$gene_name,
+                        our_max_gene = map_chr(new_snp_windows_glia, get_our_max_gene),
+                        our_max_score = map_dbl(new_snp_windows_glia, get_our_max_score),
+                        our_genes_over_one = map_chr(new_snp_windows_glia, get_our_sig_genes)) %>% 
+  arrange(rsid) %>% 
+  mutate(tier = snp_locations$tier)
+
+huh_glia <- gene_tib_glia %>% 
+  mutate(their_score = map2_dbl(bellenguez_gene, new_snp_windows_glia, get_their_score)) %>% 
+  dplyr::select(rsid, interval, our_max_gene, bellenguez_gene, our_max_score, their_score, everything()) %>% 
+  rowwise() %>% 
+  mutate(to_order = case_when(bellenguez_gene %in% unlist(str_split(our_max_gene, pattern = ", ")) ~ "Top Gene Match",
+                              TRUE ~ "Other")) %>% 
+  ungroup() %>% 
+  arrange(to_order, desc(our_max_score)) %>% 
+  gt(groupname_col = "to_order") %>% 
+  tab_header(
+    title = "Comparison of Functional Top Ranked Genes to Bellenguez et al. Method | Glia NGR"
+  ) %>% 
+  tab_style(
+    style = list(
+      cell_fill(color = "darkseagreen1")
+    ),
+    locations = cells_body(
+      columns = c(bellenguez_gene, our_max_gene), # not needed if coloring all columns
+      rows = bellenguez_gene == our_max_gene)
+  ) %>% 
+  fmt_number(
+    columns = c(our_max_score, their_score),
+    decimals = 2
+  ) %>% 
+  data_color(
+    columns = c(our_max_score, their_score),
+    colors = scales::col_numeric(
+      palette = viridis(n = 8),
+      domain = c(0, 4)
+    )
+  ) %>% 
+  row_group_order(groups = c("Top Gene Match", "Other")) %>% 
+  cols_align(
+    align = "center",
+    columns = rsid:their_score
+  ) %>% 
+  cols_width(
+    interval ~ px(250),
+    our_genes_over_one ~ px(250)
+  ) %>% 
+  cols_label(
+    rsid = md("**RSID**"),
+    interval = md("**Interval**"),
+    our_max_gene = md("**Our Top Gene**"),
+    bellenguez_gene = md("**Bellenguez et al. Top Gene**"),
+    our_max_score = md("**Score for Our Top Gene**"),
+    their_score = md("**Score for Bellenguez Top Gene**"),
+    our_genes_over_one = md("**Genes with Score Greater than One**"),
+    tier = md("**Bellenguez Tier**")
+  )
+
+gtsave(huh_glia, here("results/glia_gt.png"))
+```
+
+## Astrocyte
+```{r}
+gene_tib_astro <- tibble(rsid = names(new_snp_windows_astro),
+                         interval = paste0(snp_info$chr_name, ":", if_else(snp_info$snp_loc - 1000000 < 0, 0, snp_info$snp_loc - 1000000), "-", snp_info$snp_loc + 1000000),
+                         bellenguez_gene = snp_info$gene_name,
+                         our_max_gene = map_chr(new_snp_windows_astro, get_our_max_gene),
+                         our_max_score = map_dbl(new_snp_windows_astro, get_our_max_score),
+                         our_genes_over_one = map_chr(new_snp_windows_astro, get_our_sig_genes)) %>% 
+  arrange(rsid) %>% 
+  mutate(tier = snp_locations$tier)
+
+huh_astro <- gene_tib_astro %>% 
+  mutate(their_score = map2_dbl(bellenguez_gene, new_snp_windows_astro, get_their_score)) %>% 
+  dplyr::select(rsid, interval, our_max_gene, bellenguez_gene, our_max_score, their_score, everything()) %>% 
+  rowwise() %>% 
+  mutate(to_order = case_when(bellenguez_gene %in% unlist(str_split(our_max_gene, pattern = ", ")) ~ "Top Gene Match",
+                              TRUE ~ "Other")) %>% 
+  ungroup() %>% 
+  arrange(to_order, desc(our_max_score)) %>% 
+  gt(groupname_col = "to_order") %>% 
+  tab_header(
+    title = "Comparison of Functional Top Ranked Genes to Bellenguez et al. Method | Astrocyte NGR"
+  ) %>% 
+  tab_style(
+    style = list(
+      cell_fill(color = "darkseagreen1")
+    ),
+    locations = cells_body(
+      columns = c(bellenguez_gene, our_max_gene), # not needed if coloring all columns
+      rows = bellenguez_gene == our_max_gene)
+  ) %>% 
+  fmt_number(
+    columns = c(our_max_score, their_score),
+    decimals = 2
+  ) %>% 
+  data_color(
+    columns = c(our_max_score, their_score),
+    colors = scales::col_numeric(
+      palette = viridis(n = 8),
+      domain = c(0, 4)
+    )
+  ) %>% 
+  row_group_order(groups = c("Top Gene Match", "Other")) %>% 
+  cols_align(
+    align = "center",
+    columns = rsid:their_score
+  ) %>% 
+  cols_width(
+    interval ~ px(250),
+    our_genes_over_one ~ px(250)
+  ) %>% 
+  cols_label(
+    rsid = md("**RSID**"),
+    interval = md("**Interval**"),
+    our_max_gene = md("**Our Top Gene**"),
+    bellenguez_gene = md("**Bellenguez et al. Top Gene**"),
+    our_max_score = md("**Score for Our Top Gene**"),
+    their_score = md("**Score for Bellenguez Top Gene**"),
+    our_genes_over_one = md("**Genes with Score Greater than One**"),
+    tier = md("**Bellenguez Tier**")
+  )
+
+gtsave(huh_astro, here("results/astro_gt.png"))
+```
+
+## Classical Neuron
+```{r}
+gene_tib_neuron_full <- tibble(rsid = names(new_snp_windows_neuron_full),
+                               interval = paste0(snp_info$chr_name, ":", if_else(snp_info$snp_loc - 1000000 < 0, 0, snp_info$snp_loc - 1000000), "-", snp_info$snp_loc + 1000000),
+                               bellenguez_gene = snp_info$gene_name,
+                               our_max_gene = map_chr(new_snp_windows_neuron_full, get_our_max_gene),
+                               our_max_score = map_dbl(new_snp_windows_neuron_full, get_our_max_score),
+                               our_genes_over_one = map_chr(new_snp_windows_neuron_full, get_our_sig_genes)) %>% 
+  arrange(rsid) %>% 
+  mutate(tier = snp_locations$tier)
+
+huh_neuron_full <- gene_tib_neuron_full %>% 
+  mutate(their_score = map2_dbl(bellenguez_gene, new_snp_windows_neuron_full, get_their_score)) %>% 
+  dplyr::select(rsid, interval, our_max_gene, bellenguez_gene, our_max_score, their_score, everything()) %>% 
+  rowwise() %>% 
+  mutate(to_order = case_when(bellenguez_gene %in% unlist(str_split(our_max_gene, pattern = ", ")) ~ "Top Gene Match",
+                              TRUE ~ "Other")) %>% 
+  ungroup() %>% 
+  arrange(to_order, desc(our_max_score)) %>% 
+  gt(groupname_col = "to_order") %>% 
+  tab_header(
+    title = "Comparison of Functional Top Ranked Genes to Bellenguez et al. Method | Neuron Non-DR NGR"
+  ) %>% 
+  tab_style(
+    style = list(
+      cell_fill(color = "darkseagreen1")
+    ),
+    locations = cells_body(
+      columns = c(bellenguez_gene, our_max_gene), # not needed if coloring all columns
+      rows = bellenguez_gene == our_max_gene)
+  ) %>% 
+  fmt_number(
+    columns = c(our_max_score, their_score),
+    decimals = 2
+  ) %>% 
+  data_color(
+    columns = c(our_max_score, their_score),
+    colors = scales::col_numeric(
+      palette = viridis(n = 8),
+      domain = c(0, 4)
+    )
+  ) %>% 
+  row_group_order(groups = c("Top Gene Match", "Other")) %>% 
+  cols_align(
+    align = "center",
+    columns = rsid:their_score
+  ) %>% 
+  cols_width(
+    interval ~ px(250),
+    our_genes_over_one ~ px(250)
+  ) %>% 
+  cols_label(
+    rsid = md("**RSID**"),
+    interval = md("**Interval**"),
+    our_max_gene = md("**Our Top Gene**"),
+    bellenguez_gene = md("**Bellenguez et al. Top Gene**"),
+    our_max_score = md("**Score for Our Top Gene**"),
+    their_score = md("**Score for Bellenguez Top Gene**"),
+    our_genes_over_one = md("**Genes with Score Greater than One**"),
+    tier = md("**Bellenguez Tier**")
+  )
+
+gtsave(huh_neuron_full, here("results/neuron_full_gt.png"))
+```
+
+## Classical Astroctye
+```{r}
+gene_tib_astro_full <- tibble(rsid = names(new_snp_windows_astro_full),
+                               interval = paste0(snp_info$chr_name, ":", if_else(snp_info$snp_loc - 1000000 < 0, 0, snp_info$snp_loc - 1000000), "-", snp_info$snp_loc + 1000000),
+                               bellenguez_gene = snp_info$gene_name,
+                               our_max_gene = map_chr(new_snp_windows_astro_full, get_our_max_gene),
+                               our_max_score = map_dbl(new_snp_windows_astro_full, get_our_max_score),
+                               our_genes_over_one = map_chr(new_snp_windows_astro_full, get_our_sig_genes)) %>% 
+  arrange(rsid) %>% 
+  mutate(tier = snp_locations$tier)
+
+huh_astro_full <- gene_tib_astro_full %>% 
+  mutate(their_score = map2_dbl(bellenguez_gene, new_snp_windows_astro_full, get_their_score)) %>% 
+  dplyr::select(rsid, interval, our_max_gene, bellenguez_gene, our_max_score, their_score, everything()) %>% 
+ rowwise() %>% 
+  mutate(to_order = case_when(bellenguez_gene %in% unlist(str_split(our_max_gene, pattern = ", ")) ~ "Top Gene Match",
+                              TRUE ~ "Other")) %>% 
+  ungroup() %>% 
+  arrange(to_order, desc(our_max_score)) %>% 
+  gt(groupname_col = "to_order") %>% 
+  tab_header(
+    title = "Comparison of Functional Top Ranked Genes to Bellenguez et al. Method | Astrocyte Non-DR NGR"
+  ) %>% 
+  tab_style(
+    style = list(
+      cell_fill(color = "darkseagreen1")
+    ),
+    locations = cells_body(
+      columns = c(bellenguez_gene, our_max_gene), # not needed if coloring all columns
+      rows = bellenguez_gene == our_max_gene)
+  ) %>% 
+  fmt_number(
+    columns = c(our_max_score, their_score),
+    decimals = 2
+  ) %>% 
+  data_color(
+    columns = c(our_max_score, their_score),
+    colors = scales::col_numeric(
+      palette = viridis(n = 8),
+      domain = c(0, 4)
+    )
+  ) %>% 
+  row_group_order(groups = c("Top Gene Match", "Other")) %>% 
+  cols_align(
+    align = "center",
+    columns = rsid:their_score
+  ) %>% 
+  cols_width(
+    interval ~ px(250),
+    our_genes_over_one ~ px(250)
+  ) %>% 
+  cols_label(
+    rsid = md("**RSID**"),
+    interval = md("**Interval**"),
+    our_max_gene = md("**Our Top Gene**"),
+    bellenguez_gene = md("**Bellenguez et al. Top Gene**"),
+    our_max_score = md("**Score for Our Top Gene**"),
+    their_score = md("**Score for Bellenguez Top Gene**"),
+    our_genes_over_one = md("**Genes with Score Greater than One**"),
+    tier = md("**Bellenguez Tier")
+  )
+
+gtsave(huh_astro_full, here("results/astro_full_gt.png"))
+```
+
+## Classical Glia
+```{r}
+gene_tib_glia_full <- tibble(rsid = names(new_snp_windows_glia_full),
+                               interval = paste0(snp_info$chr_name, ":", if_else(snp_info$snp_loc - 1000000 < 0, 0, snp_info$snp_loc - 1000000), "-", snp_info$snp_loc + 1000000),
+                               bellenguez_gene = snp_info$gene_name,
+                               our_max_gene = map_chr(new_snp_windows_glia_full, get_our_max_gene),
+                               our_max_score = map_dbl(new_snp_windows_glia_full, get_our_max_score),
+                               our_genes_over_one = map_chr(new_snp_windows_glia_full, get_our_sig_genes)) %>% 
+  arrange(rsid) %>% 
+  mutate(tier = snp_locations$tier)
+
+huh_glia_full <- gene_tib_glia_full %>% 
+  mutate(their_score = map2_dbl(bellenguez_gene, new_snp_windows_glia_full, get_their_score)) %>% 
+  dplyr::select(rsid, interval, our_max_gene, bellenguez_gene, our_max_score, their_score, everything()) %>% 
+  rowwise() %>% 
+  mutate(to_order = case_when(bellenguez_gene %in% unlist(str_split(our_max_gene, pattern = ", ")) ~ "Top Gene Match",
+                              TRUE ~ "Other")) %>% 
+  ungroup() %>%  
+  arrange(to_order, desc(our_max_score)) %>% 
+  gt(groupname_col = "to_order") %>% 
+  tab_header(
+    title = "Comparison of Functional Top Ranked Genes to Bellenguez et al. Method | Glia Non-DR NGR"
+  ) %>% 
+  tab_style(
+    style = list(
+      cell_fill(color = "darkseagreen1")
+    ),
+    locations = cells_body(
+      columns = c(bellenguez_gene, our_max_gene), # not needed if coloring all columns
+      rows = bellenguez_gene == our_max_gene)
+  ) %>% 
+  fmt_number(
+    columns = c(our_max_score, their_score),
+    decimals = 2
+  ) %>% 
+  data_color(
+    columns = c(our_max_score, their_score),
+    colors = scales::col_numeric(
+      palette = viridis(n = 8),
+      domain = c(0, 4)
+    )
+  ) %>% 
+  row_group_order(groups = c("Top Gene Match", "Other")) %>% 
+  cols_align(
+    align = "center",
+    columns = rsid:their_score
+  ) %>% 
+  cols_width(
+    interval ~ px(250),
+    our_genes_over_one ~ px(250)
+  ) %>% 
+  cols_label(
+    rsid = md("**RSID**"),
+    interval = md("**Interval**"),
+    our_max_gene = md("**Our Top Gene**"),
+    bellenguez_gene = md("**Bellenguez et al. Top Gene**"),
+    our_max_score = md("**Score for Our Top Gene**"),
+    their_score = md("**Score for Bellenguez Top Gene**"),
+    our_genes_over_one = md("**Genes with Score Greater than One**"),
+    tier = md("**Bellenguez Tier**")
+  )
+
+gtsave(huh_glia_full, here("results/glia_full_gt.png"))
+```

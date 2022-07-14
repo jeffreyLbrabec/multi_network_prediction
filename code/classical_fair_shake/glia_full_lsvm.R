@@ -1,0 +1,107 @@
+# Updated multi net kmeds run
+
+library(tidyverse)
+library(tidymodels)
+library(here)
+library(janitor)
+library(gprofiler2)
+library(magrittr)
+library(igraph)
+library(ranger)
+library(kernlab)
+library(baguette)
+library(furrr)
+library(R.utils)
+library(parallel)
+library(doParallel)
+library(safejoin)
+library(cluster)
+library(fpc)
+library(themis)
+
+# Source in Functions -----------------------------------------------------
+
+fun_dir <- list.files(here("src"), full.names = TRUE)
+
+for(i in 1:length(fun_dir)) {
+  
+  source(fun_dir[i])
+  
+}
+
+
+# Read in Data ------------------------------------------------------------
+glia_tibble <- read_csv(here("data/glia_tibble.csv"))
+
+
+# Split Data --------------------------------------------------------------
+# set.seed(210)
+# multi_net_initial_split <- initial_split(multi_net_kmeds_tibble, strata = class)
+# multi_net_train <- training(multi_net_initial_split)
+# multi_net_test <- testing(multi_net_initial_split)
+
+set.seed(42)
+
+glia_cv_folds <- nested_cv(glia_tibble,
+                           outside = vfold_cv(v = 10, strata = class),
+                           inside = bootstraps(times = 25, strata = class))
+
+
+# Set Up Cost Grid and Run Model ------------------------------------------
+cost_vals = 10^seq(-5, 3, 1)
+
+dir.create(file.path(here("results"), paste("glia", "linear", "results", sep = "_")))
+
+res_dir <- here("results/glia_linear_results")
+
+plan(multisession)
+glia_trial_results <- future_map2(glia_cv_folds$inner_resamples,
+                                  glia_cv_folds$id,
+                                  possibly(summarizing_results, NA_real_),
+                                  res_dir = res_dir,
+                                  learner = "svm_linear",
+                                  cost = cost_vals,
+                                  .options = furrr_options(seed = 42)) 
+write_rds(glia_trial_results, here("results/glia_linear_results/glia_trial_results.rds"))
+
+
+# Find Best Hyper-Parameters ----------------------------------------------
+glia_fold_res <- future_map(glia_trial_results, format_folds)
+
+glia_score_res <- future_map(glia_fold_res, median_wrapper)
+
+best_hypers <- function(dat) dat[which.max(dat$auc),]
+
+best_glia_hyper_df <- map_dfr(glia_score_res, best_hypers) %>% 
+  mutate(fold_id = glia_cv_folds$id) 
+
+
+# Read in Best Models -----------------------------------------------------
+param_list <- list(cost = best_glia_hyper_df$cost,
+                   fold_id = best_glia_hyper_df$fold_id)
+
+best_glia_models <- best_glia_hyper_df %>% 
+  mutate(models =  future_pmap(param_list, 
+                               possibly(pick_model, NA_real_),
+                               learner = "svm_linear",
+                               results_dir = here("results/glia_linear_results"))) %>% 
+  mutate(splits = glia_cv_folds$splits)
+
+
+# Set up Final Model Training ---------------------------------------------
+
+dir.create(file.path(here("results"), paste("glia", "full_linear", "final", "predictions", sep = "_")))
+
+best_glia_mod_list <- list(splits = best_glia_models$splits,
+                           models = best_glia_models$models,
+                           fold_id = best_glia_models$fold_id)
+
+final_res_dir <- here("results/glia_full_linear_final_predictions")
+
+final_glia_auc <- best_glia_models %>% 
+  mutate(assessment_auc = pmap_dbl(best_glia_mod_list, 
+                                   possibly(bag_wrapper, NA_real_),
+                                   res_dir = final_res_dir)) %>% 
+  select(cost, fold_id, auc, assessment_auc)
+
+write_rds(final_glia_auc, here("results/glia_full_linear_final_predictions/final_glia_auc.rds"))

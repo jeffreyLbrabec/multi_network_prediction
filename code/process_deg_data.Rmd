@@ -1,0 +1,202 @@
+---
+title: "Process DEG Files"
+author: "Jeff Brabec"
+date: "10/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+library(readxl)
+library(ggupset)
+library(hrbrthemes)
+source(here("src/get_deg_aucs.R"))
+source(here("src/convert_to_names.R"))
+source(here("src/final_auc_processing.R"))
+source(here("src/get_scrnaseq_data.R"))
+source(here("src/make_tile_plot.R"))
+```
+
+# No Pathology V. All Pathology
+
+## Read in Data from Excel Sheet
+
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. The abbreviations `np_ap` designate No-pathology v. Any Pathology. Both early and Late pathology groups are included in "any pathology".
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ap_degs <- get_scrnaseq_data(filename = here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                       sheet = "Ex",
+                                       range = "A2:I16968")
+#Inhibitory Neuron Data
+in_neu_np_ap_degs <- get_scrnaseq_data(filename = here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                       sheet = "In",
+                                       range = "A2:I15504")
+#Astrocyte Data
+ast_np_ap_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                                    sheet = "Ast",
+                                    range = "A2:I13551") 
+#Microglia Data
+micro_np_ap_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                                      sheet = "Mic",
+                                      range = "A2:I10522")
+
+#Oligodendrocyte Data
+olig_np_ap_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                     sheet = "Oli",
+                                     range = "A2:I14725")
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ap_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                    sheet = "Opc",
+                                    range = "A2:I13266")
+```
+
+## Pan Cell-Type DEGs
+```{r}
+pan_neuron_np_ap_degs <- map2(ex_neu_np_ap_degs, in_neu_np_ap_degs, bind_rows) %>% 
+  map(., filter, !duplicated(gene)) %>% 
+  map(., select, gene)
+
+pan_glia_np_ap_degs <- pmap(list(ast_np_ap_degs, micro_np_ap_degs, olig_np_ap_degs, opc_np_ap_degs), bind_rows) %>% 
+  map(., filter, !duplicated(gene)) %>% 
+  map(., select, gene)
+
+```
+
+## Save Gene Sets
+```{r}
+write_rds(ex_neu_np_ap_degs, here("data/single_cell_data/no_path_v_all_path/ex_neu_np_ap_degs.rds"))
+write_rds(in_neu_np_ap_degs, here("data/single_cell_data/no_path_v_all_path/in_neu_np_ap_degs.rds"))
+write_rds(ast_np_ap_degs, here("data/single_cell_data/no_path_v_all_path/ast_np_ap_degs.rds"))
+write_rds(micro_np_ap_degs, here("data/single_cell_data/no_path_v_all_path/micro_np_ap_degs.rds"))
+write_rds(olig_np_ap_degs, here("data/single_cell_data/no_path_v_all_path/olig_np_ap_degs.rds"))
+write_rds(opc_np_ap_degs, here("data/single_cell_data/no_path_v_all_path/opc_np_ap_degs.rds"))
+
+write_rds(pan_neuron_np_ap_degs, here("data/single_cell_data/no_path_v_all_path/pan_neuron_np_ap_degs.rds"))
+write_rds(pan_glia_np_ap_degs, here("data/single_cell_data/no_path_v_all_path/pan_glia_np_ap_degs.rds"))
+```
+
+
+# No Pathology V. Early Pathology
+
+## Read in Data from Excel Sheet
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. 
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ep_degs <- get_scrnaseq_data(filename = here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                       sheet = "Ex",
+                                       range = "L2:T16846")
+#Inhibitory Neuron Data
+in_neu_np_ep_degs <- get_scrnaseq_data(filename = here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                       sheet = "In",
+                                       range = "L2:T15262")
+#Astrocyte Data
+ast_np_ep_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                                    sheet = "Ast",
+                                    range = "L2:T13228") 
+#Microglia Data
+micro_np_ep_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                                      sheet = "Mic",
+                                      range = "L2:T9746")
+
+#Oligodendrocyte Data
+olig_np_ep_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                     sheet = "Oli",
+                                     range = "L2:T14358")
+
+#Olig Precursor Cell Data
+opc_np_ep_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                    sheet = "Opc",
+                                    range = "L2:T12947")
+```
+
+## Pan Cell-Type DEGs
+```{r}
+pan_neuron_np_ep_degs <- map2(ex_neu_np_ep_degs, in_neu_np_ep_degs, bind_rows) %>% 
+  map(., filter, !duplicated(gene)) %>% 
+  map(., select, gene)
+
+pan_glia_np_ep_degs <- pmap(list(ast_np_ep_degs, micro_np_ep_degs, olig_np_ep_degs, opc_np_ep_degs), bind_rows) %>% 
+  map(., filter, !duplicated(gene)) %>% 
+  map(., select, gene)
+
+```
+
+## Save Gene Sets
+```{r}
+write_rds(ex_neu_np_ep_degs, here("data/single_cell_data/no_path_v_early_path/ex_neu_np_ep_degs.rds"))
+write_rds(in_neu_np_ep_degs, here("data/single_cell_data/no_path_v_early_path/in_neu_np_ep_degs.rds"))
+write_rds(ast_np_ep_degs, here("data/single_cell_data/no_path_v_early_path/ast_np_ep_degs.rds"))
+write_rds(micro_np_ep_degs, here("data/single_cell_data/no_path_v_early_path/micro_np_ep_degs.rds"))
+write_rds(olig_np_ep_degs, here("data/single_cell_data/no_path_v_early_path/olig_np_ep_degs.rds"))
+write_rds(opc_np_ep_degs, here("data/single_cell_data/no_path_v_early_path/opc_np_ep_degs.rds"))
+
+write_rds(pan_neuron_np_ep_degs, here("data/single_cell_data/no_path_v_early_path/pan_neuron_np_ep_degs.rds"))
+write_rds(pan_glia_np_ep_degs, here("data/single_cell_data/no_path_v_early_path/pan_glia_np_ep_degs.rds"))
+```
+
+# Early Pathology V. Late Pathology
+
+## Read in Data from Excel Sheet
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. Where `ep_lp` denotes early versus late pathology comparison.
+```{r}
+#Excitatory Neuron Data
+ex_neu_ep_lp_degs <- get_scrnaseq_data(filename = here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                       sheet = "Ex",
+                                       range = "W2:AE16444")
+#Inhibitory Neuron Data
+in_neu_ep_lp_degs <- get_scrnaseq_data(filename = here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                       sheet = "In",
+                                       range = "W2:AE14486")
+#Astrocyte Data
+ast_ep_lp_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                                    sheet = "Ast",
+                                    range = "W2:AE12361") 
+#Microglia Data
+micro_ep_lp_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"), 
+                                      sheet = "Mic",
+                                      range = "W2:AE8513")
+
+#Oligodendrocyte Data
+olig_ep_lp_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                     sheet = "Oli",
+                                     range = "W2:AE13657")
+
+#Oligodendrocyte Precursor Cell Data
+opc_ep_lp_degs <- get_scrnaseq_data(here("data/single_cell_data/41586_2019_1195_MOESM4_ESM.xlsx"),
+                                    sheet = "Opc",
+                                    range = "W2:AE11927")
+```
+
+## Pan Cell-Type DEGs
+```{r}
+pan_neuron_ep_lp_degs <- map2(ex_neu_ep_lp_degs, in_neu_ep_lp_degs, bind_rows) %>% 
+  map(., filter, !duplicated(gene)) %>% 
+  map(., select, gene)
+
+pan_glia_ep_lp_degs <- pmap(list(ast_ep_lp_degs, micro_ep_lp_degs, olig_ep_lp_degs, opc_ep_lp_degs), bind_rows) %>% 
+  map(., filter, !duplicated(gene)) %>% 
+  map(., select, gene)
+
+```
+
+## Save Gene Sets
+```{r}
+write_rds(ex_neu_ep_lp_degs, here("data/single_cell_data/early_path_v_late_path/ex_neu_ep_lp_degs.rds"))
+write_rds(in_neu_ep_lp_degs, here("data/single_cell_data/early_path_v_late_path/in_neu_ep_lp_degs.rds"))
+write_rds(ast_ep_lp_degs, here("data/single_cell_data/early_path_v_late_path/ast_ep_lp_degs.rds"))
+write_rds(micro_ep_lp_degs, here("data/single_cell_data/early_path_v_late_path/micro_ep_lp_degs.rds"))
+write_rds(olig_ep_lp_degs, here("data/single_cell_data/early_path_v_late_path/olig_ep_lp_degs.rds"))
+write_rds(opc_ep_lp_degs, here("data/single_cell_data/early_path_v_late_path/opc_ep_lp_degs.rds"))
+
+write_rds(pan_neuron_ep_lp_degs, here("data/single_cell_data/early_path_v_late_path/pan_neuron_ep_lp_degs.rds"))
+write_rds(pan_glia_ep_lp_degs, here("data/single_cell_data/early_path_v_late_path/pan_glia_ep_lp_degs.rds"))
+```

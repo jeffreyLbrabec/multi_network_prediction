@@ -1,0 +1,805 @@
+---
+title: "Semantic Plots"
+author: "Jeff Brabec"
+date: "10/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+library(readxl)
+library(patchwork)
+library(writexl)
+library(ggrepel)
+source(here("src/get_scrnaseq_data.R"))
+source(here("src/semantic_plot.R"))
+source(here("src/get_ont.R"))
+```
+
+# No Pathology v. All Pathology
+
+## Read in scRNAseq Data
+In the markdown document `process_deg_data` we extracted the DEG for each cell type and merged together the gene lists of like cell types (neuron and glia) into pan-cell type gene lists. The abbreviations `np_ap` designate No-pathology v. Any Pathology. Both early and Late pathology groups are included in "any pathology".
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/ex_neu_np_ap_degs.rds"))
+
+#Inhibitory Neuron Data
+in_neu_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/in_neu_np_ap_degs.rds"))
+
+#Astrocyte Data
+ast_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/ast_np_ap_degs.rds"))
+
+#Microglia Data
+micro_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/micro_np_ap_degs.rds"))
+
+#Oligodendrocyte Data
+olig_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/olig_np_ap_degs.rds"))
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/opc_np_ap_degs.rds"))
+
+#Pan-Neuronal Data
+pan_neuron_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/pan_neuron_np_ap_degs.rds"))
+
+#Pan-Glial Data
+pan_glia_np_ap_degs <- read_rds(here("data/single_cell_data/no_path_v_all_path/pan_glia_np_ap_degs.rds"))
+```
+
+## Ontology
+
+### Excitatory Neuron
+```{r}
+en_np_ap_ont <- map(ex_neu_np_ap_degs, get_ont, organism = "hsapiens")
+write_xlsx(en_np_ap_ont, here("results/rnaseq_ontology/gost_res/no_path_v_all_path/en_ont.xlsx"))
+
+en_np_ap_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/en_neu_up_revigo.csv"), 
+                                      title = "Excitatory Neuron Up-Regulated Ontology", 
+                                      subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/en_np_ap_up_sem_plot.png"),
+       en_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+en_np_ap_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/ex_neu_down_revigo.csv"), 
+                                        title = "Excitatory Neuron Down-Regulated Ontology", 
+                                        subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/en_np_ap_down_sem_plot.png"),
+       en_np_ap_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+en_np_ap_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/ex_neu_all_revigo.csv"),
+                                       title = "Excitatory Neuron All DEG Ontology",
+                                       subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/en_np_ap_all_sem_plot.png"),
+       en_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Inhibitory Neuron
+Nothing much of interest so moved on
+```{r}
+
+in_np_ap_ont <- map(in_neu_np_ap_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(in_np_ap_ont, here("results/rnaseq_ontology/gost_res/no_path_v_all_path/in_ont.xlsx"))
+
+```
+
+### Astrocyte
+
+```{r}
+ast_np_ap_ont <- map(ast_np_ap_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(ast_np_ap_ont, here("results/rnaseq_ontology/gost_res/no_path_v_all_path/ast_ont.xlsx"))
+
+ast_np_ap_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/ast_up_revigo.csv"), 
+                                       title = "Astrocyte Up-Regulated Ontology", 
+                                       subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/ast_np_ap_up_sem_plot.png"),
+       ast_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Microglia
+
+```{r}
+micro_np_ap_ont <- map(micro_np_ap_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(micro_np_ap_ont, here("results/rnaseq_ontology/gost_res/no_path_v_all_path/micro_ont.xlsx"))
+
+micro_np_ap_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/micro_up_revigo.csv"), 
+                                         title = "Microglia Up-Regulated Ontology", 
+                                         subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/micro_np_ap_up_sem_plot.png"),
+       micro_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+micro_np_ap_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/micro_all_revigo.csv"), 
+                                          title = "Microglia All DEG Ontology", 
+                                          subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/micro_np_ap_all_sem_plot.png"),
+       micro_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Oligodendrocyte
+
+```{r}
+olig_np_ap_ont <- map(olig_np_ap_degs, get_ont, organism = "hsapiens")
+write_xlsx(olig_np_ap_ont, here("results/rnaseq_ontology/gost_res/no_path_v_all_path/olig_ont.xlsx"))
+
+olig_np_ap_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/olig_up_revigo.csv"), 
+                                         title = "Oligodendrocyte Up-Regulated Ontology", 
+                                         subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/olig_np_ap_up_sem_plot.png"),
+       olig_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+olig_np_ap_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/olig_down_revigo.csv"), 
+                                         title = "Oligodendrocyte Down-Regulated Ontology", 
+                                         subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/olig_np_ap_down_sem_plot.png"),
+       olig_np_ap_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+olig_np_ap_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/olig_all_revigo.csv"), 
+                                          title = "Oligodendrocyte All DEG Ontology", 
+                                          subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/olig_np_ap_all_sem_plot.png"),
+       olig_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### OPC
+```{r}
+opc_np_ap_ont <- map(opc_np_ap_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(opc_np_ap_ont, here("results/rnaseq_ontology/gost_res/no_path_v_all_path/opc_ont.xlsx"))
+#None Significant
+
+# opc_np_ap_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/opc_up_revigo.csv"), 
+#                                          title = "OPC Up-Regulated Ontology", 
+#                                          subtitle = "No Pathology V. All Pathology")
+# ggsave(here("results/figures/semantic_plots/no_path_v_all_path/opc_np_ap_up_sem_plot.png"),
+#        opc_np_ap_up_sem_plot,
+#        height = 8,
+#        width = 8,
+#        units = "in",
+#        dpi = 600)
+# opc_np_ap_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/opc_down_revigo.csv"), 
+#                                          title = "OPC Down-Regulated Ontology", 
+#                                          subtitle = "No Pathology V. All Pathology")
+# ggsave(here("results/figures/semantic_plots/no_path_v_all_path/opc_np_ap_down_sem_plot.png"),
+#        opc_np_ap_down_sem_plot,
+#        height = 8,
+#        width = 8,
+#        units = "in",
+#        dpi = 600)
+# opc_np_ap_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/opc_all_revigo.csv"), 
+#                                           title = "OPC All DEG Ontology", 
+#                                           subtitle = "No Pathology V. All Pathology")
+# ggsave(here("results/figures/semantic_plots/no_path_v_all_path/opc_np_ap_all_sem_plot.png"),
+#        opc_np_ap_all_sem_plot,
+#        height = 8,
+#        width = 8,
+#        units = "in",
+#        dpi = 600)
+```
+
+### Pan-Neuronal
+```{r}
+pan_neuron_np_ap_ont <- map(pan_neuron_np_ap_degs, get_ont, organism = "hsapiens")
+write_xlsx(pan_neuron_np_ap_ont, here("results/rnaseq_ontology/gost_res/no_path_v_all_path/pan_neuron_ont.xlsx"))
+
+pan_neuron_np_ap_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/pan_neuron_up_revigo.csv"),
+                                         title = "Pan-Neuronal Up-Regulated Ontology",
+                                         subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/pan_neuron_np_ap_up_sem_plot.png"),
+       pan_neuron_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_neuron_np_ap_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/pan_neuron_down_revigo.csv"),
+                                         title = "Pan-Neuronal Down-Regulated Ontology",
+                                         subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/pan_neuron_np_ap_down_sem_plot.png"),
+       pan_neuron_np_ap_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_neuron_np_ap_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/pan_neuron_all_revigo.csv"),
+                                          title = "Pan-Neuronal All DEG Ontology",
+                                          subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/pan_neuron_np_ap_all_sem_plot.png"),
+       pan_neuron_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Pan-Glial
+
+```{r}
+pan_glia_np_ap_ont <- map(pan_glia_np_ap_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(pan_glia_np_ap_ont, here("results/rnaseq_ontology/gost_res/no_path_v_all_path/pan_glia_ont.xlsx"))
+
+pan_glia_np_ap_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/pan_glia_up_revigo.csv"),
+                                         title = "Pan-Glial Up-Regulated Ontology",
+                                         subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/pan_glia_np_ap_up_sem_plot.png"),
+       pan_glia_np_ap_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_glia_np_ap_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_all_path/pan_glia_all_revigo.csv"),
+                                          title = "Pan-Glial All DEG Ontology",
+                                          subtitle = "No Pathology V. All Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_all_path/pan_glia_np_ap_all_sem_plot.png"),
+       pan_glia_np_ap_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+
+# No Pathology V. Early Pathology
+
+## Read in scRNAseq Data
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. 
+## Read in scRNAseq Data
+In the markdown document `process_deg_data` we extracted the DEG for each cell type and merged together the gene lists of like cell types (neuron and glia) into pan-cell type gene lists. 
+```{r}
+#Excitatory Neuron Data
+ex_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ex_neu_np_ep_degs.rds"))
+
+#Inhibitory Neuron Data
+in_neu_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/in_neu_np_ep_degs.rds"))
+
+#Astrocyte Data
+ast_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/ast_np_ep_degs.rds"))
+
+#Microglia Data
+micro_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/micro_np_ep_degs.rds"))
+
+#Oligodendrocyte Data
+olig_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/olig_np_ep_degs.rds"))
+
+#Oligodendrocyte Precursor Cell Data
+opc_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/opc_np_ep_degs.rds"))
+
+#Pan-Neuronal Data
+pan_neuron_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/pan_neuron_np_ep_degs.rds"))
+
+#Pan-Glial Data
+pan_glia_np_ep_degs <- read_rds(here("data/single_cell_data/no_path_v_early_path/pan_glia_np_ep_degs.rds"))
+```
+
+## Ontology
+
+### Excitatory Neuron
+```{r}
+en_np_ep_ont <- map(ex_neu_np_ep_degs, get_ont, organism = "hsapiens")
+write_xlsx(en_np_ep_ont, here("results/rnaseq_ontology/gost_res/no_path_v_early_path/en_ont.xlsx"))
+
+en_np_ep_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/en_up_revigo.csv"), 
+                                      title = "Excitatory Neuron Up-Regulated Ontology", 
+                                      subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/en_np_ep_up_sem_plot.png"),
+       en_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+en_np_ep_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/en_down_revigo.csv"), 
+                                        title = "Excitatory Neuron Down-Regulated Ontology", 
+                                        subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/en_np_ep_down_sem_plot.png"),
+       en_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+en_np_ep_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/en_all_revigo.csv"),
+                                       title = "Excitatory Neuron All DEG Ontology",
+                                       subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/en_np_ep_all_sem_plot.png"),
+       en_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Inhibitory Neuron
+Nothing much of interest so moved on
+```{r}
+in_np_ep_ont <- map(in_neu_np_ep_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(in_np_ep_ont, here("results/rnaseq_ontology/gost_res/no_path_v_early_path/in_ont.xlsx"))
+#Up non-significant results
+in_np_ep_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/in_down_revigo.csv"), 
+                                        title = "Inhibitory Neuron Down-Regulated Ontology", 
+                                        subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/in_np_ep_down_sem_plot.png"),
+       in_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+in_np_ep_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/in_all_revigo.csv"),
+                                       title = "Inhibitory Neuron All DEG Ontology",
+                                       subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/in_np_ep_all_sem_plot.png"),
+       in_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Astrocyte
+
+```{r}
+ast_np_ep_ont <- map(ast_np_ep_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(ast_np_ep_ont, here("results/rnaseq_ontology/gost_res/no_path_v_early_path/ast_ont.xlsx"))
+#Down non-significant results
+#All not enough results
+
+ast_np_ep_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/ast_up_revigo.csv"), 
+                                       title = "Astrocyte Up-Regulated Ontology", 
+                                       subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/ast_np_ep_up_sem_plot.png"),
+       ast_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Microglia
+
+```{r}
+micro_np_ep_ont <- map(micro_np_ep_degs, get_ont, organism = "hsapiens")
+write_xlsx(micro_np_ep_ont, here("results/rnaseq_ontology/gost_res/no_path_v_early_path/micro_ont.xlsx"))
+
+micro_np_ep_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/micro_up_revigo.csv"), 
+                                         title = "Microglia Up-Regulated Ontology", 
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/micro_np_ep_up_sem_plot.png"),
+       micro_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+micro_np_ep_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/micro_down_revigo.csv"), 
+                                         title = "Microglia Down-Regulated Ontology", 
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/micro_np_ep_down_sem_plot.png"),
+       micro_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+micro_np_ep_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/micro_all_revigo.csv"), 
+                                          title = "Microglia All DEG Ontology", 
+                                          subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/micro_np_ep_all_sem_plot.png"),
+       micro_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Oligodendrocyte
+```{r}
+olig_np_ep_ont <- map(olig_np_ep_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(olig_np_ep_ont, here("results/rnaseq_ontology/gost_res/no_path_v_early_path/olig_ont.xlsx"))
+
+olig_np_ep_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/olig_down_revigo.csv"), 
+                                         title = "Oligodendrocyte Down-Regulated Ontology", 
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/olig_np_ep_down_sem_plot.png"),
+       olig_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+olig_np_ep_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/olig_all_revigo.csv"), 
+                                          title = "Oligodendrocyte All DEG Ontology", 
+                                          subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/olig_np_ep_all_sem_plot.png"),
+       olig_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### OPC
+```{r}
+opc_np_ep_ont <- map(opc_np_ep_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(opc_np_ep_ont, here("results/rnaseq_ontology/gost_res/no_path_v_early_path/opc_ont.xlsx"))
+
+opc_np_ep_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/opc_up_revigo.csv"), 
+                                         title = "OPC Up-Regulated Ontology", 
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/opc_np_ep_up_sem_plot.png"),
+       opc_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Pan-Neuronal
+```{r}
+pan_neuron_np_ep_ont <- map(pan_neuron_np_ep_degs, get_ont, organism = "hsapiens")
+write_xlsx(pan_neuron_np_ep_ont, here("results/rnaseq_ontology/gost_res/no_path_v_early_path/pan_neuron_ont.xlsx"))
+
+pan_neuron_np_ep_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/pan_neuron_up_revigo.csv"),
+                                         title = "Pan-Neuronal Up-Regulated Ontology",
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/pan_neuron_np_ep_up_sem_plot.png"),
+       pan_neuron_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_neuron_np_ep_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/pan_neuron_down_revigo.csv"),
+                                         title = "Pan-Neuronal Down-Regulated Ontology",
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/pan_neuron_np_ep_down_sem_plot.png"),
+       pan_neuron_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_neuron_np_ep_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/pan_neuron_all_revigo.csv"),
+                                          title = "Pan-Neuronal All DEG Ontology",
+                                          subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/pan_neuron_np_ep_all_sem_plot.png"),
+       pan_neuron_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Pan-Glial
+```{r}
+pan_glia_np_ep_ont <- map(pan_glia_np_ep_degs, get_ont, organism = "hsapiens")
+write_xlsx(pan_glia_np_ep_ont, here("results/rnaseq_ontology/gost_res/no_path_v_early_path/pan_glia_ont.xlsx"))
+
+pan_glia_np_ep_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/pan_glia_up_revigo.csv"),
+                                         title = "Pan-Glial Up-Regulated Ontology",
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/pan_glia_np_ep_up_sem_plot.png"),
+       pan_glia_np_ep_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_glia_np_ep_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/pan_glia_down_revigo.csv"),
+                                         title = "Pan-Glial Down-Regulated Ontology",
+                                         subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/pan_glia_np_ep_down_sem_plot.png"),
+       pan_glia_np_ep_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_glia_np_ep_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/no_path_v_early_path/pan_glia_all_revigo.csv"),
+                                          title = "Pan-Glial All DEG Ontology",
+                                          subtitle = "No Pathology V. Early Pathology")
+ggsave(here("results/figures/semantic_plots/no_path_v_early_path/pan_glia_np_ep_all_sem_plot.png"),
+       pan_glia_np_ep_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+# Early Pathology V. Late Pathology
+
+## Read in scRNAseq Data
+Here we use the custom function `get_scrnaseq_data` which reads in a specified section of the excel sheet and splits that data into UP, DOWN, and ALL genes based on Z score. Where `ep_lp` denotes early versus late pathology comparison.
+```{r}
+#Excitatory Neuron Data
+ex_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ex_neu_ep_lp_degs.rds"))
+
+#Inhibitory Neuron Data
+in_neu_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/in_neu_ep_lp_degs.rds"))
+
+#Astrocyte Data
+ast_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/ast_ep_lp_degs.rds"))
+
+#Microglia Data
+micro_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/micro_ep_lp_degs.rds"))
+
+#Oligodendrocyte Data
+olig_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/olig_ep_lp_degs.rds"))
+
+#Oligodendrocyte Precursor Cell Data
+opc_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/opc_ep_lp_degs.rds"))
+
+#Pan-Neuronal Data
+pan_neuron_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/pan_neuron_ep_lp_degs.rds"))
+
+#Pan-Glial Data
+pan_glia_ep_lp_degs <- read_rds(here("data/single_cell_data/early_path_v_late_path/pan_glia_ep_lp_degs.rds"))
+```
+
+## Ontology
+
+### Excitatory Neuron
+```{r}
+en_ep_lp_ont <- map(ex_neu_ep_lp_degs, get_ont, organism = "hsapiens")
+write_xlsx(en_ep_lp_ont, here("results/rnaseq_ontology/gost_res/early_path_v_late_path/en_ont.xlsx"))
+
+en_ep_lp_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/en_up_revigo.csv"), 
+                                      title = "Excitatory Neuron Up-Regulated Ontology", 
+                                      subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/en_ep_lp_up_sem_plot.png"),
+       en_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+en_ep_lp_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/en_down_revigo.csv"), 
+                                        title = "Excitatory Neuron Down-Regulated Ontology", 
+                                        subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/en_ep_lp_down_sem_plot.png"),
+       en_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+en_ep_lp_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/en_all_revigo.csv"),
+                                       title = "Excitatory Neuron All DEG Ontology",
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/en_ep_lp_all_sem_plot.png"),
+       en_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Inhibitory Neuron
+earlything much of interest so moved on
+```{r}
+in_ep_lp_ont <- map(in_neu_ep_lp_degs, get_ont, organism = "hsapiens")
+write_xlsx(in_ep_lp_ont, here("results/rnaseq_ontology/gost_res/early_path_v_late_path/in_ont.xlsx"))
+
+in_ep_lp_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/in_up_revigo.csv"), 
+                                      title = "Excitatory Neuron Up-Regulated Ontology", 
+                                      subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/in_ep_lp_up_sem_plot.png"),
+       in_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+in_ep_lp_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/in_down_revigo.csv"), 
+                                        title = "Inhibitory Neuron Down-Regulated Ontology", 
+                                        subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/in_ep_lp_down_sem_plot.png"),
+       in_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+in_ep_lp_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/in_all_revigo.csv"),
+                                       title = "Inhibitory Neuron All DEG Ontology",
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/in_ep_lp_all_sem_plot.png"),
+       in_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+
+```
+
+### Astrocyte
+
+```{r}
+ast_ep_lp_ont <- map(ast_ep_lp_degs, get_ont, organism = "hsapiens")
+write_xlsx(ast_ep_lp_ont, here("results/rnaseq_ontology/gost_res/early_path_v_late_path/ast_ont.xlsx"))
+#Down earlyn-significant results
+#All earlyt eearlyugh results
+
+ast_ep_lp_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/ast_up_revigo.csv"), 
+                                       title = "Astrocyte Up-Regulated Ontology", 
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/ast_ep_lp_up_sem_plot.png"),
+       ast_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+ast_ep_lp_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/ast_down_revigo.csv"), 
+                                        title = "Astrocyte Down-Regulated Ontology", 
+                                        subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/ast_ep_lp_down_sem_plot.png"),
+       ast_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+ast_ep_lp_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/ast_all_revigo.csv"),
+                                       title = "Astrocyte All DEG Ontology",
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/ast_ep_lp_all_sem_plot.png"),
+       ast_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Microglia
+
+```{r}
+#not enough significant genes...
+micro_ep_lp_ont <- map(micro_ep_lp_degs, get_ont, organism = "hsapiens")
+
+```
+
+### Oligodendrocyte
+```{r}
+olig_ep_lp_ont <- map(olig_ep_lp_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(olig_ep_lp_ont, here("results/rnaseq_ontology/gost_res/early_path_v_late_path/olig_ont.xlsx"))
+#Down earlyn-significant results
+#All earlyt eearlyugh results
+
+olig_ep_lp_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/olig_up_revigo.csv"), 
+                                       title = "Oligodendrocyte Up-Regulated Ontology", 
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/olig_ep_lp_up_sem_plot.png"),
+       olig_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+olig_ep_lp_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/olig_all_revigo.csv"),
+                                       title = "Oligodendrocyte All DEG Ontology",
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/olig_ep_lp_all_sem_plot.png"),
+       olig_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### OPC
+```{r}
+opc_ep_lp_ont <- map(opc_ep_lp_degs, get_ont, organism = "hsapiens", significant = FALSE)
+write_xlsx(opc_ep_lp_ont, here("results/rnaseq_ontology/gost_res/early_path_v_late_path/opc_ont.xlsx"))
+#Down earlyn-significant results
+#All earlyt eearlyugh results
+
+opc_ep_lp_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/opc_up_revigo.csv"), 
+                                       title = "OPC Up-Regulated Ontology", 
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/opc_ep_lp_up_sem_plot.png"),
+       opc_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+opc_ep_lp_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/opc_all_revigo.csv"),
+                                       title = "OPC All DEG Ontology",
+                                       subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/opc_ep_lp_all_sem_plot.png"),
+       opc_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Pan-Neuronal
+```{r}
+pan_neuron_ep_lp_ont <- map(pan_neuron_ep_lp_degs, get_ont, organism = "hsapiens")
+write_xlsx(pan_neuron_ep_lp_ont, here("results/rnaseq_ontology/gost_res/early_path_v_late_path/pan_neuron_ont.xlsx"))
+
+pan_neuron_ep_lp_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/pan_neuron_up_revigo.csv"),
+                                         title = "Pan-Neuronal Up-Regulated Ontology",
+                                         subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/pan_neuron_ep_lp_up_sem_plot.png"),
+       pan_neuron_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_neuron_ep_lp_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/pan_neuron_down_revigo.csv"),
+                                         title = "Pan-Neuronal Down-Regulated Ontology",
+                                         subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/pan_neuron_ep_lp_down_sem_plot.png"),
+       pan_neuron_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_neuron_ep_lp_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/pan_neuron_all_revigo.csv"),
+                                          title = "Pan-Neuronal All DEG Ontology",
+                                          subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/pan_neuron_ep_lp_all_sem_plot.png"),
+       pan_neuron_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```
+
+### Pan-Glial
+```{r}
+pan_glia_ep_lp_ont <- map(pan_glia_ep_lp_degs, get_ont, organism = "hsapiens")
+write_xlsx(pan_glia_ep_lp_ont, here("results/rnaseq_ontology/gost_res/early_path_v_late_path/pan_glia_ont.xlsx"))
+
+pan_glia_ep_lp_up_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/pan_glia_up_revigo.csv"),
+                                         title = "Pan-Glial Up-Regulated Ontology",
+                                         subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/pan_glia_ep_lp_up_sem_plot.png"),
+       pan_glia_ep_lp_up_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_glia_ep_lp_down_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/pan_glia_down_revigo.csv"),
+                                         title = "Pan-Glial Down-Regulated Ontology",
+                                         subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/pan_glia_ep_lp_down_sem_plot.png"),
+       pan_glia_ep_lp_down_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+pan_glia_ep_lp_all_sem_plot <- semantic_plot(here("results/rnaseq_ontology/revigo_res/early_path_v_late_path/pan_glia_all_revigo.csv"),
+                                          title = "Pan-Glial All DEG Ontology",
+                                          subtitle = "Early Pathology V. Late Pathology")
+ggsave(here("results/figures/semantic_plots/early_path_v_late_path/pan_glia_ep_lp_all_sem_plot.png"),
+       pan_glia_ep_lp_all_sem_plot,
+       height = 8,
+       width = 8,
+       units = "in",
+       dpi = 600)
+```

@@ -1,0 +1,494 @@
+---
+title: "Single-cell performance"
+author: "Jeff Brabec"
+date: "9/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(janitor)
+library(safejoin)
+library(gprofiler2)
+library(yardstick)
+library(viridis)
+source(here("src/get_deg_aucs.R"))
+source(here("src/convert_to_names.R"))
+source(here("src/get_fpr.R"))
+```
+
+## Look at mean AUCs
+```{r}
+astro_linear_aucs <- read_rds(here("results/astro_linear_final_predictions/final_astro_auc.rds")) 
+
+mean_astro_linear_auc <- astro_linear_aucs %>% 
+  summarize(mean_linear_astro = mean(assessment_auc))
+
+astro_rbf_aucs <- read_rds(here("results/astro_rbf_final_predictions/final_astro_rbf_auc.rds"))
+
+mean_astro_rbf_auc <- astro_rbf_aucs %>% 
+  summarize(mean_rbf_astro = mean(assessment_auc))
+
+glia_linear_aucs <- read_rds(here("results/glia_linear_final_predictions/final_glia_auc.rds"))
+
+mean_glia_linear_auc <- glia_linear_aucs %>% 
+  summarize(mean_linear_glia = mean(assessment_auc))
+
+glia_rbf_aucs <- read_rds(here("results/glia_rbf_final_predictions/final_glia_rbf_auc.rds"))
+
+mean_glia_rbf_auc <- glia_rbf_aucs %>% 
+  summarize(mean_rbf_glia = mean(assessment_auc))
+
+neuron_linear_aucs <- read_rds(here("results/neuron_linear_final_predictions/final_neuron_auc.rds"))
+
+mean_neuron_linear_auc <- neuron_linear_aucs %>% 
+  summarize(mean_linear_neuron = mean(assessment_auc))
+
+neuron_rbf_aucs <- read_rds(here("results/neuron_rbf_final_predictions/final_neuron_rbf_auc.rds"))
+
+mean_neuron_rbf_auc <- neuron_rbf_aucs %>% 
+  summarize(mean_rbf_neuron = mean(assessment_auc))
+
+multi_net_linear <- read_rds(here(here("results/multi_net_linear_final_predictions/final_multi_net_linear_auc.rds")))
+
+mean_mn_linear <- multi_net_linear %>% 
+  summarize(mean_linear_mn = mean(assessment_auc))
+
+multi_net_rbf <- read_rds(here("results/multi_net_rbf_final_predictions/final_multi_net_rbf_auc.rds"))
+
+mean_mn_rbf <- multi_net_rbf %>% 
+  summarize(mean_rbf_mn = mean(assessment_auc))
+```
+
+```{r}
+astro_line_prep <- astro_linear_aucs %>% 
+  mutate(tissue = "Astrocyte",
+         mod_type = "Linear-SVM")
+
+astro_rbf_prep <- astro_rbf_aucs %>% 
+  mutate(tissue = "Astrocyte",
+         mod_type = "Gaussian-SVM")
+
+glia_line_prep <- glia_linear_aucs %>% 
+  mutate(tissue = "Glia",
+         mod_type = "Linear-SVM")
+
+glia_rbf_prep <- glia_rbf_aucs %>% 
+  mutate(tissue = "Glia",
+         mod_type = "Gaussian-SVM")
+
+neuron_line_prep <- neuron_linear_aucs %>% 
+  mutate(tissue = "Neuron",
+         mod_type = "Linear-SVM")
+
+neuron_rbf_prep <- neuron_rbf_aucs %>% 
+  mutate(tissue = "Neuron",
+         mod_type = "Gaussian-SVM")
+
+mn_line_prep <- multi_net_linear %>% 
+  mutate(tissue = "Multi-Net",
+         mod_type = "Linear-SVM")
+
+mn_rbf_prep <- multi_net_rbf %>% 
+  mutate(tissue = "Multi-Net",
+         mod_type = "Gaussian-SVM")
+
+box_df <- bind_rows(astro_line_prep,
+                    astro_rbf_prep,
+                    glia_line_prep,
+                    glia_rbf_prep,
+                    neuron_line_prep,
+                    neuron_rbf_prep,
+                    mn_line_prep,
+                    mn_rbf_prep)
+
+ggplot(box_df, aes(x = tissue, y = assessment_auc)) +
+  geom_boxplot(aes(color = tissue)) +
+  geom_point(aes(color = fold_id)) +
+  scale_color_viridis_d() +
+  labs(x = "",
+       y = "AUC",
+       title = "Comparison of testing AUC variance") +
+  facet_wrap(~ mod_type) +
+  theme_light() +
+  theme(legend.position = "none")
+
+ggplot(box_df, aes(x = tissue, y = auc)) +
+  geom_boxplot(aes(color = tissue)) +
+  geom_point(aes(color = fold_id)) +
+  scale_color_viridis_d() +
+  labs(x = "",
+       y = "AUC",
+       title = "Comparison of training AUC variance") +
+  facet_wrap(~ mod_type) +
+  theme_light() +
+  theme(legend.position = "none")
+
+```
+
+
+## Average AUCs
+```{r}
+mean_auc_tissue <- bind_cols(mean_astro_linear_auc, 
+                             mean_astro_rbf_auc, 
+                             mean_glia_linear_auc, 
+                             mean_glia_rbf_auc, 
+                             mean_neuron_linear_auc, 
+                             mean_neuron_rbf_auc, 
+                             mean_mn_linear, 
+                             mean_mn_rbf) %>% 
+  pivot_longer(cols = everything(), names_to = "mean_type", values_to = "auc") %>% 
+  separate(mean_type, into = c("mean", "mod_type", "tissue")) %>% 
+  select(-mean) %>% 
+  mutate(tissue = case_when(str_detect(tissue, "astro") ~ "Astrocyte",
+                            str_detect(tissue, "glia") ~ "Glia",
+                            str_detect(tissue, "neuron") ~ "Neuron",
+                            str_detect(tissue, "mn") ~ "Multi-Net"),
+         mod_type = str_to_title(mod_type)) %>% 
+  ggplot(aes(x = tissue, y = auc, fill = tissue)) + 
+  geom_col() + 
+  scale_fill_viridis_d() + 
+  facet_wrap(~mod_type) + 
+  labs(x = "",
+       y = "AUC",
+       title = "Mean AUC for Each Tissue by Model") +
+  theme_light() +
+  theme(legend.position = "none")
+
+```
+
+
+## Read in Data
+```{r}
+ex_genes <- read_rds(here("data/single_cell_data/no_path_v_early_path/ex_neu_np_ep_degs.rds")) 
+
+
+# in_genes <- read_csv(here("data/single_cell_data/in_neu_full_genes.csv")) %>% 
+#   clean_names() %>% 
+#   select(gene, ind_model_adj_pvals, ind_model_fc, mixed_model_z, mixed_model_p, de_gs_ind_model, de_gs_ind_mix_models)
+# 
+# ast_genes <- read_csv(here("data/single_cell_data/ast_full_genes.csv")) %>% 
+#   clean_names() %>% 
+#   select(gene, ind_model_adj_pvals, ind_model_fc, mixed_model_z, mixed_model_p, de_gs_ind_model, de_gs_ind_mix_models)
+# 
+# micro_genes <- read_csv(here("data/single_cell_data/micro_full_genes.csv")) %>% 
+#   clean_names() %>% 
+#   select(gene, ind_model_adj_pvals, ind_model_fc, mixed_model_z, mixed_model_p, de_gs_ind_model, de_gs_ind_mix_models)
+# 
+# olig_genes <- read_csv(here("data/single_cell_data/olig_full_genes.csv")) %>% 
+#   clean_names() %>% 
+#   select(gene, ind_model_adj_pvals, ind_model_fc, mixed_model_z, mixed_model_p, de_gs_ind_model, de_gs_ind_mix_models)
+# 
+# opc_genes <- read_csv(here("data/single_cell_data/opc_full_genes.csv")) %>% 
+#   clean_names() %>% 
+#   select(gene, ind_model_adj_pvals, ind_model_fc, mixed_model_z, mixed_model_p, de_gs_ind_model, de_gs_ind_mix_models)
+```
+
+```{r}
+
+
+deg_ex_genes <- ex_genes$ALL %>% 
+  select(gene, mixed_model_p, mixed_model_z) 
+
+deg_in_genes <- in_genes %>% 
+  filter(de_gs_ind_mix_models == TRUE,
+         de_gs_ind_model == TRUE) %>% 
+  select(gene, mixed_model_p, mixed_model_z) 
+
+deg_micro_genes <- micro_genes %>% 
+  filter(de_gs_ind_mix_models == TRUE,
+         de_gs_ind_model == TRUE) %>% 
+  select(gene, mixed_model_p, mixed_model_z)
+
+deg_ast_genes <- ast_genes %>% 
+  filter(de_gs_ind_mix_models == TRUE,
+         de_gs_ind_model == TRUE) %>% 
+  select(gene, mixed_model_p, mixed_model_z)
+
+deg_olig_genes <- olig_genes %>% 
+  filter(de_gs_ind_mix_models == TRUE,
+         de_gs_ind_model == TRUE) %>% 
+  select(gene, mixed_model_p, mixed_model_z)
+
+deg_opc_genes <- opc_genes %>% 
+  filter(de_gs_ind_mix_models == TRUE,
+         de_gs_ind_model == TRUE) %>% 
+  select(gene, mixed_model_p, mixed_model_z)
+```
+
+## Astrocyte scores
+```{r}
+astro_final_scores <- get_final_scores(here("results/astro_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+astro_gene_names <- convert_to_names(astro_final_scores$genes, 
+                                     species = "hsapiens", 
+                                     target = "ENTREZGENE_ACC") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input))
+
+astro_final_score_names <- astro_final_scores %>% 
+  inner_join(astro_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+
+
+astro_ast_deg_aucs <- get_deg_aucs(deg_ast_genes, astro_final_score_names)
+
+astro_ex_deg_aucs <- get_deg_aucs(deg_ex_genes, astro_final_score_names)
+
+astro_in_deg_aucs <- get_deg_aucs(deg_in_genes, astro_final_score_names)
+
+astro_micro_deg_aucs <- get_deg_aucs(deg_micro_genes, astro_final_score_names)
+```
+
+
+## Neuron
+```{r}
+linear_neuron_final_scores <- read_csv(here("results/final_scores/linear_neuron_final_scores.csv"))
+linear_neuron_fpr <- get_fpr(linear_neuron_final_scores)
+
+
+neuron_final_score_names <- neuron_final_scores %>% 
+  inner_join(neuron_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+
+
+neuron_ex_deg_aucs <- get_deg_aucs(deg_ex_genes, linear_neuron_fpr, log_fpr)
+
+neuron_in_deg_aucs <- get_deg_aucs(deg_in_genes, neuron_final_score_names)
+
+neuron_ast_deg_aucs <- get_deg_aucs(deg_ast_genes, neuron_final_score_names)
+
+neuron_micro_deg_aucs <- get_deg_aucs(deg_micro_genes, neuron_final_score_names)
+```
+## Glia?
+```{r}
+glia_final_scores <- get_final_scores(here("results/glia_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+glia_gene_names <- convert_to_names(glia_final_scores$genes, 
+                                    species = "hsapiens", 
+                                    target = "ENTREZGENE_ACC") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input))
+
+glia_final_score_names <- glia_final_scores %>% 
+  inner_join(glia_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+
+
+glia_ex_deg_aucs <- get_deg_aucs(deg_ex_genes, glia_final_score_names)
+
+glia_in_deg_aucs <- get_deg_aucs(deg_in_genes, glia_final_score_names)
+
+glia_ast_deg_aucs <- get_deg_aucs(deg_ast_genes, glia_final_score_names)
+
+glia_micro_deg_aucs <- get_deg_aucs(deg_micro_genes, glia_final_score_names)
+```
+
+## Multi-net
+
+```{r}
+multi_net_linear_final_scores <- get_final_scores(here("results/multi_net_linear_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+multi_net_linear_gene_names <- convert_to_names(multi_net_linear_final_scores$genes, 
+                                                species = "hsapiens", 
+                                                target = "ENTREZGENE_ACC") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input))
+
+multi_net_linear_final_score_names <- multi_net_linear_final_scores %>% 
+  inner_join(multi_net_linear_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+
+
+multi_net_linear_ex_deg_aucs <- get_deg_aucs(deg_ex_genes, linear_mn_fpr, log_fpr)
+
+multi_net_linear_in_deg_aucs <- get_deg_aucs(deg_in_genes, multi_net_linear_final_score_names)
+
+multi_net_linear_ast_deg_aucs <- get_deg_aucs(deg_ast_genes, multi_net_linear_final_score_names)
+
+multi_net_linear_micro_deg_aucs <- get_deg_aucs(deg_micro_genes, multi_net_linear_final_score_names)
+
+
+linear_mn_final_scores <- read_csv(here("results/final_scores/linear_mn_final_scores.csv"))
+```
+
+## Calculate FPR and TPR for Genes
+```{r}
+
+linear_mn_fpr <- get_fpr(linear_mn_final_scores)
+
+```
+
+
+```{r}
+auc_tibble <- tribble(~tissue, ~cell, ~auc,
+                      "Astrocyte", "Astrocyte", astro_ast_deg_aucs,
+                      "Astrocyte", "Ex. Neuron", astro_ex_deg_aucs,
+                      "Astrocyte", "In. Neuron", astro_in_deg_aucs,
+                      "Astrocyte", "Microglia",  astro_micro_deg_aucs,
+                      "Neuron", "Astrocyte", neuron_ast_deg_aucs,
+                      "Neuron", "Ex. Neuron", neuron_ex_deg_aucs,
+                      "Neuron", "In. Neuron", neuron_in_deg_aucs,
+                      "Neuron", "Microglia", neuron_micro_deg_aucs,
+                      "Glia", "Astrocyte", glia_ast_deg_aucs,
+                      "Glia", "Ex. Neuron", glia_ex_deg_aucs,
+                      "Glia", "In. Neuron", glia_in_deg_aucs,
+                      "Glia", "Microglia", glia_micro_deg_aucs,
+                      "Multi-Net", "Astrocyte", multi_net_linear_ast_deg_aucs,
+                      "Multi-Net", "Ex. Neuron", multi_net_linear_ex_deg_aucs,
+                      "Multi-Net", "In. Neuron", multi_net_linear_in_deg_aucs,
+                      "Multi-Net", "Microglia", multi_net_linear_micro_deg_aucs)
+
+linear_auc_grid <- auc_tibble %>% 
+  ggplot(aes(tissue, cell)) +
+  geom_tile(aes(fill = auc)) +
+  scale_fill_viridis_c() +
+  labs(x = "Tissue Network",
+       y = "RNAseq Cells",
+       fill = "AUC",
+       title = "Linear-SVM AUC for scRNAseq DEGs") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid = element_blank())
+
+```
+## RBF
+
+### Astrocyte scores
+```{r}
+astro_rbf_final_scores <- get_final_scores(here("results/astro_rbf_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+astro_rbf_gene_names <- convert_to_names(astro_rbf_final_scores$genes, 
+                                         species = "hsapiens", 
+                                         target = "ENTREZGENE_ACC") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input))
+
+astro_rbf_final_score_names <- astro_rbf_final_scores %>% 
+  inner_join(astro_rbf_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+
+
+astro_rbf_ast_deg_aucs <- get_deg_aucs(deg_ast_genes, astro_rbf_final_score_names)
+
+astro_rbf_ex_deg_aucs <- get_deg_aucs(deg_ex_genes, astro_rbf_final_score_names)
+
+astro_rbf_in_deg_aucs <- get_deg_aucs(deg_in_genes, astro_rbf_final_score_names)
+
+astro_rbf_micro_deg_aucs <- get_deg_aucs(deg_micro_genes, astro_rbf_final_score_names)
+```
+
+
+### Neuron
+```{r}
+neuron_rbf_final_scores <- get_final_scores(here("results/neuron_rbf_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+neuron_rbf_gene_names <- convert_to_names(neuron_rbf_final_scores$genes, 
+                                          species = "hsapiens", 
+                                          target = "ENTREZGENE_ACC") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input))
+
+neuron_rbf_final_score_names <- neuron_rbf_final_scores %>% 
+  inner_join(neuron_rbf_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+
+
+neuron_rbf_ex_deg_aucs <- get_deg_aucs(deg_ex_genes, neuron_rbf_final_score_names)
+
+neuron_rbf_in_deg_aucs <- get_deg_aucs(deg_in_genes, neuron_rbf_final_score_names)
+
+neuron_rbf_ast_deg_aucs <- get_deg_aucs(deg_ast_genes, neuron_rbf_final_score_names)
+
+neuron_rbf_micro_deg_aucs <- get_deg_aucs(deg_micro_genes, neuron_rbf_final_score_names)
+```
+
+### Glia?
+```{r}
+glia_rbf_final_scores <- get_final_scores(here("results/glia_rbf_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+glia_rbf_gene_names <- convert_to_names(glia_rbf_final_scores$genes, 
+                                        species = "hsapiens", 
+                                        target = "ENTREZGENE_ACC") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input))
+
+glia_rbf_final_score_names <- glia_rbf_final_scores %>% 
+  inner_join(glia_rbf_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+
+
+glia_rbf_ex_deg_aucs <- get_deg_aucs(deg_ex_genes, glia_rbf_final_score_names)
+
+glia_rbf_in_deg_aucs <- get_deg_aucs(deg_in_genes, glia_rbf_final_score_names)
+
+glia_rbf_ast_deg_aucs <- get_deg_aucs(deg_ast_genes, glia_rbf_final_score_names)
+
+glia_rbf_micro_deg_aucs <- get_deg_aucs(deg_micro_genes, glia_rbf_final_score_names)
+```
+
+## Multi-Net
+```{r}
+multi_net_rbf_final_scores <- get_final_scores(here("results/multi_net_rbf_final_predictions")) %>% 
+  mutate(across(genes, as.character))
+
+multi_net_rbf_gene_names <- convert_to_names(multi_net_rbf_final_scores$genes, 
+                                             species = "hsapiens", 
+                                             target = "ENTREZGENE_ACC") %>% 
+  select(input, name) %>% 
+  filter(!duplicated(input))
+
+multi_net_rbf_final_score_names <- multi_net_rbf_final_scores %>% 
+  inner_join(multi_net_rbf_gene_names, by = c("genes" = "input")) %>% 
+  select(gene_name = name, class, final_mean_pred)
+
+
+multi_net_rbf_ex_deg_aucs <- get_deg_aucs(deg_ex_genes, multi_net_rbf_final_score_names)
+
+multi_net_rbf_in_deg_aucs <- get_deg_aucs(deg_in_genes, multi_net_rbf_final_score_names)
+
+multi_net_rbf_ast_deg_aucs <- get_deg_aucs(deg_ast_genes, multi_net_rbf_final_score_names)
+
+multi_net_rbf_micro_deg_aucs <- get_deg_aucs(deg_micro_genes, multi_net_rbf_final_score_names)
+```
+
+```{r}
+auc_rbf_tibble <- tribble(~tissue, ~cell, ~auc,
+                          "Astrocyte", "Astrocyte", astro_rbf_ast_deg_aucs,
+                          "Astrocyte", "Ex. Neuron", astro_rbf_ex_deg_aucs,
+                          "Astrocyte", "In. Neuron", astro_rbf_in_deg_aucs,
+                          "Astrocyte", "Microglia",  astro_rbf_micro_deg_aucs,
+                          "Neuron", "Astrocyte", neuron_rbf_ast_deg_aucs,
+                          "Neuron", "Ex. Neuron", neuron_rbf_ex_deg_aucs,
+                          "Neuron", "In. Neuron", neuron_rbf_in_deg_aucs,
+                          "Neuron", "Microglia", neuron_rbf_micro_deg_aucs,
+                          "Glia", "Astrocyte", glia_rbf_ast_deg_aucs,
+                          "Glia", "Ex. Neuron", glia_rbf_ex_deg_aucs,
+                          "Glia", "In. Neuron", glia_rbf_in_deg_aucs,
+                          "Glia", "Microglia", glia_rbf_micro_deg_aucs,
+                          "Multi-Net", "Astrocyte", multi_net_rbf_ast_deg_aucs,
+                          "Multi-Net", "Ex. Neuron", multi_net_rbf_ex_deg_aucs,
+                          "Multi-Net", "In. Neuron", multi_net_rbf_in_deg_aucs,
+                          "Multi-Net", "Microglia", multi_net_rbf_micro_deg_aucs)
+
+auc_rbf_tibble %>% 
+  ggplot(aes(tissue, cell)) +
+  geom_tile(aes(fill = auc)) +
+  scale_fill_viridis_c() +
+  labs(x = "Tissue Network",
+       y = "RNAseq Cells",
+       fill = "AUC",
+       title = "RBF-SVM AUC for scRNAseq DEGs") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid = element_blank())
+
+```
